@@ -4,14 +4,17 @@ import shutil
 import os
 from uuid import uuid4
 
-app = FastAPI()
+app = FastAPI(json_encoders={str: lambda v: v.encode('utf-8').decode('utf-8')})
 
 UPLOAD_DIR = "static/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/")
 def root():
-    return {"message": "서간표 서버가 준비되었습니다!"}
+    return JSONResponse(
+        content={"message": "서간표 서버가 준비되었습니다, 민지님!"},
+        headers={"Content-Type": "application/json; charset=utf-8"}
+    )
 
 @app.post("/upload/course-image")
 async def upload_course_image(file: UploadFile = File(...)):
