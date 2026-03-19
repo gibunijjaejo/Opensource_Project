@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 import shutil
 import os
 from uuid import uuid4
+from app.api import auth
 
 app = FastAPI()
 
@@ -55,3 +56,4 @@ async def upload_course_image(
         },
         headers={"Content-Type": "application/json; charset=utf-8"}
     )
+app.include_router(auth.router)
