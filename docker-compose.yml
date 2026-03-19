@@ -1,12 +1,13 @@
-version: '3.8'
+# version은 이제 생략해도 됩니다 (최신 도커 컴포즈 권장사항)
 
 services:
+  # 1. 데이터베이스 (PostgreSQL)
   db:
     image: postgres:15
     container_name: seoganpyo-db
     restart: always
     environment:
-      POSTGRES_USER: minji        # 민지님 이름으로 사용자 설정
+      POSTGRES_USER: minji
       POSTGRES_PASSWORD: password123
       POSTGRES_DB: seoganpyo_db
     ports:
@@ -14,17 +15,30 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # 2. 인증용 임시 저장소 (Redis)
+  redis:
+    image: redis:alpine
+    container_name: seoganpyo-redis
+    ports:
+      - "6379:6379"
+
+  # 3. FastAPI 백엔드
   backend:
     build: .
     container_name: seoganpyo-api
     ports:
       - "8000:8000"
     volumes:
-      - ./app:/code/app
+      # 루트 전체를 연결해서 코드 수정 시 바로 반영
+      - .:/code
+    env_file:
+      - .env  
     environment:
       DATABASE_URL: postgresql://minji:password123@db:5432/seoganpyo_db
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       - db
+      - redis
 
 volumes:
   postgres_data:
