@@ -1,17 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from app.services import auth_service
-
-# 1. 요청 데이터 규격 정의 (Pydantic 모델)
-# 이 모델을 사용해야 Swagger에서 422 에러(입구 컷)가 안 납니다!
-class EmailRequest(BaseModel):
-    email: str
-
-class VerifyRequest(BaseModel):
-    email: str
-    code: str
-
+from app.schemas.auth import EmailRequest, VerifyRequest
 # 라우터 설정
 router = APIRouter(prefix="/auth", tags=["User Authentication"])
 
