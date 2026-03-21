@@ -8,7 +8,7 @@ import os
 from app.database import get_db
 from app.models.user import User
 
-router = APIRouter()
+router = APIRouter(prefix="/upload", tags=["Upload"])
 
 UPLOAD_DIR = "static/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
