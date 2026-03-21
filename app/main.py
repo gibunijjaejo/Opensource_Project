@@ -9,10 +9,9 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# 분리된 기능들을 app에 등록합니다.
-# /upload/course-image 식으로 주소가 만들어집니다.
-app.include_router(upload.router, prefix="/upload", tags=["Upload"])
-app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+# 분리된 기능들을 app에 등록합니다.라우터 등록할때 각 파일에서 접두사 정의 하고 여기선 간단하게 호출만!
+app.include_router(upload.router)
+app.include_router(auth.router)
 
 @app.get("/")
 async def root():
