@@ -96,3 +96,7 @@ yarn-error.log*
 
 ### Jenkins ###
 .jenkins/
+
+### DB ###
+*.db
+static/uploads/*
