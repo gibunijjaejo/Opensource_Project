@@ -2,15 +2,15 @@ import random
 import redis
 from app.services.email_service import send_verification_email
 
-# 도커 컴포즈의 서비스 이름 'redis'로 연결
+# redis로 연결
 redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
 
 def request_email_verification(email: str, background_tasks):
     auth_code = f"{random.randint(0, 999999):06d}"
-    redis_client.set(email, auth_code, ex=180) # 3분 만료
+    redis_client.set(email, auth_code, ex=180) # TTL 3분, 6자리 OTP
     background_tasks.add_task(send_verification_email, email, auth_code)
 
-def verify_auth_code(email: str, code: str):
+def verify_auth_code(email: str, code: str): # 캐시와 값 같아서 인증 성공시 캐시 삭제
     saved_code = redis_client.get(email)
     if saved_code == code:
         redis_client.delete(email)
