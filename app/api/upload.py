@@ -5,21 +5,16 @@ from fastapi.responses import JSONResponse
 import shutil
 import os
 from uuid import uuid4
-
-# 1. app 대신 router를 사용합니다.
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
-# 업로드 폴더 설정
 UPLOAD_DIR = "static/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# 2. @app.post -> @router.post 로 수정
 @router.post("/course-image")
 async def upload_course_image(
     file: UploadFile = File(...), 
     semester: int = Form(...)
 ):
-    # (나머지 로직은 동일...)
     allowed_extensions = ["jpg", "jpeg", "png"]
     file_ext = file.filename.split(".")[-1].lower()
     
