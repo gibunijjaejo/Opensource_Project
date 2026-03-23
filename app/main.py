@@ -1,3 +1,4 @@
+from app.models import user, course, professor
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from app.api import auth, upload  # 분리한 라우터들 가져오기

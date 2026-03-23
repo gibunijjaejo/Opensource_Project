@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 class Professor(Base):
-    __tablename__ = "professor"
+    __tablename__ = "professors"
     professor_id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=False)
     course_name = Column(String(50))
