@@ -8,7 +8,7 @@ class Track(Base):
     track_name = Column(String(100), nullable=False)
 
 class History(Base):
-    __tablename__ = "history"
+    __tablename__ = "histories"
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(Integer, ForeignKey("users.student_id"))
     course_code = Column(String(20), ForeignKey("courses.course_code"))
@@ -18,7 +18,7 @@ class History(Base):
     course = relationship("Course", back_populates="histories")
 
 class Cart(Base):
-    __tablename__ = "cart"
+    __tablename__ = "carts"
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(Integer, ForeignKey("users.student_id"))
     course_id = Column(Integer, ForeignKey("courses.course_id"))
