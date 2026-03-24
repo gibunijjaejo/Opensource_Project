@@ -13,7 +13,7 @@ class Course(Base):
     class_days = Column(String(50))
     class_start_time = Column(String(10))
     class_end_time = Column(String(10))
-    professor_id = Column(Integer, ForeignKey("professor.professor_id"))
+    professor_id = Column(Integer, ForeignKey("professors.professor_id"))
     year = Column(Integer)
     semester = Column(Integer)
     course_category = Column(String(50))

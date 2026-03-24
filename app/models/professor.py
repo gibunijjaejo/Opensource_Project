@@ -14,7 +14,7 @@ class Professor(Base):
 
 class ProfessorDetail(Base):
     __tablename__ = "professor_details"
-    professor_id = Column(Integer, ForeignKey("professor.professor_id"), primary_key=True)
+    professor_id = Column(Integer, ForeignKey("professors.professor_id"), primary_key=True)
     name = Column(String(50))
     email = Column(String(100))
     lab = Column(String(50))
