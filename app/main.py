@@ -1,18 +1,19 @@
-from app.models import user, course, professor
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from app.api import auth, upload  # 분리한 라우터들 가져오기
+from app.api import auth, upload, courses, cart
 from app.database import engine, Base
-from app.models import user, course, professor, activity 
+from app.models import user, course, professor, activity  # noqa: F401 — Base 테이블 등록용
 
 # 서버 실행 시 DB 테이블 생성
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="서간표 통합 서버")
 
-# 라우터 등록 (prefix는 각 파일 내부 router 설정에 따름)
+# 라우터 등록
 app.include_router(auth.router)
 app.include_router(upload.router)
+app.include_router(courses.router)
+app.include_router(cart.router)
 
 @app.get("/")
 async def root():
