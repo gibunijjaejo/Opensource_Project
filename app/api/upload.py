@@ -11,7 +11,6 @@ from app.services.history_service import save_histories
 from app.services.image_service import (
     DEFAULT_MATCH_THRESHOLD,
     process_timetable_image,
-    save_ocr_result_json,
 )
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
@@ -51,11 +50,8 @@ async def upload_course_image(
     file_path = os.path.join(student_dir, file_name)
 
     # 학기당 1개의 시간표만 업로드 가능
-    # 이미지 파일이 이미 있거나, OCR json이 이미 있으면 중복 업로드로 간주
-    json_dir = os.path.join("data", "timetable_ocr", str(student_id))
-    json_path = os.path.join(json_dir, f"{student_id}_{semester}.json")
-
-    if os.path.exists(file_path) or os.path.exists(json_path):
+    # 이미지 파일만 기준으로 중복 업로드 체크
+    if os.path.exists(file_path):
         raise HTTPException(
             status_code=400,
             detail=f"{semester}학기 시간표는 이미 업로드되어 있습니다.",
@@ -75,14 +71,7 @@ async def upload_course_image(
             threshold=DEFAULT_MATCH_THRESHOLD,
         )
 
-        # 2) OCR 결과 JSON 저장
-        saved_json_path = save_ocr_result_json(
-            student_id=student_id,
-            semester=semester,
-            result=ocr_result,
-        )
-
-        # 3) 전공으로 판단된 과목만 histories 저장
+        # 2) 전공으로 판단된 과목만 histories 저장
         saved_histories = save_histories(
             db=db,
             student_id=student_id,
@@ -97,7 +86,6 @@ async def upload_course_image(
                 "status": "success",
                 "message": f"{semester}학기 시간표 업로드 및 OCR 처리 완료!",
                 "image_path": file_path,
-                "ocr_json_path": saved_json_path,
                 "threshold": DEFAULT_MATCH_THRESHOLD,
                 "matched_count": len(ocr_result["matched_courses"]),
                 "saved_count": len(saved_histories),
