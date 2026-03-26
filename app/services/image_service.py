@@ -1,7 +1,5 @@
 # 이미지 처리 로직
 
-import json
-import os
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional, Tuple, Set
@@ -17,11 +15,22 @@ from app.models.course import Course
 
 _OCR_ENGINE: Optional[PaddleOCR] = None
 
-DEFAULT_MATCH_THRESHOLD = 83.0
+DEFAULT_MATCH_THRESHOLD = 78.0
 
 _WEEKDAY_WORDS = {"월", "화", "수", "목", "금", "토", "일"}
 _WEEKDAY_LONG_WORDS = {
     "월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"
+}
+
+# 같은 시간표에 아래 과목 중 하나라도 있으면
+# OCR이 '컴퓨터프로그래밍I'로 잡혀도 '컴퓨터프로그래밍II'로 보정
+CP2_TRIGGER_COURSES = {
+    "이산구조",
+    "디지털회로개론",
+    "운영체제",
+    "문재해결프로그래밍실습",
+    "JAVA언어",
+    "딥러닝개론",
 }
 
 
@@ -111,11 +120,9 @@ def is_room_like(text: str) -> bool:
     if not norm:
         return False
 
-    # 영문+숫자 조합
     if re.fullmatch(r"[a-z]{1,3}\d{2,4}", norm):
         return True
 
-    # 숫자+영문 1자리 정도
     if re.fullmatch(r"\d{2,4}[a-z]{0,1}", norm):
         return True
 
@@ -150,6 +157,14 @@ def is_probable_course_candidate(text: str) -> bool:
     return True
 
 
+def normalized_is_pure_time_or_index(norm: str, display: str) -> bool:
+    if is_time_like(display):
+        return True
+    if norm.isdigit():
+        return True
+    return False
+
+
 def is_course_line_like(text: str) -> bool:
     """
     '과목명의 일부 줄'인지 넉넉하게 판정.
@@ -168,19 +183,10 @@ def is_course_line_like(text: str) -> bool:
     if is_room_like(display):
         return False
 
-    # 너무 짧은 일반 노이즈 제외
     if len(norm) < 2:
         return False
 
     return True
-
-
-def normalized_is_pure_time_or_index(norm: str, display: str) -> bool:
-    if is_time_like(display):
-        return True
-    if norm.isdigit():
-        return True
-    return False
 
 
 def _bbox_stats(bbox: List[List[float]]) -> Dict[str, float]:
@@ -266,16 +272,10 @@ def horizontal_overlap_ratio(a: Dict[str, Any], b: Dict[str, Any]) -> float:
 def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     """
     같은 셀 내부에서 여러 줄 과목명인지 판정.
-    핵심:
-    - 세로로 인접
-    - x축이 거의 같은 열/셀 안
-    - 둘 다 과목 줄처럼 보임
-    - 강의실/요일/시간은 제외
     """
     if not is_course_line_like(a["display_text"]) or not is_course_line_like(b["display_text"]):
         return False
 
-    # b가 아래쪽 줄이라고 가정
     if b["y_center"] < a["y_center"]:
         a, b = b, a
 
@@ -288,7 +288,6 @@ def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     x_overlap = horizontal_overlap_ratio(a, b)
     center_diff = abs(a["x_center"] - b["x_center"])
 
-    # 같은 셀/열 안인지 더 엄격하게
     same_column_like = (
         x_overlap >= 0.35
         or center_diff <= width_ref * 0.45
@@ -297,17 +296,13 @@ def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     if not same_column_like:
         return False
 
-    # 줄 간격 허용
     if vertical_gap > height_ref * 1.9:
         return False
 
     a_norm = normalize_text(a["display_text"])
     b_norm = normalize_text(b["display_text"])
 
-    # 매우 짧은 꼬리 텍스트는 더 잘 붙이기
     short_tail = len(b_norm) <= 6
-
-    # 위 줄 자체가 이미 긴 과목명 일부처럼 보이면 우선 병합
     likely_wrapped_title = len(a_norm) >= 4 and len(b_norm) >= 2
 
     return short_tail or likely_wrapped_title
@@ -315,7 +310,6 @@ def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
 
 def build_merge_graph(blocks: List[Dict[str, Any]]) -> Dict[int, Set[int]]:
     """
-    전역 정렬 후 바로 이전 블록 하나만 보는 대신,
     인접 가능성이 있는 블록들끼리 그래프를 만들어 연결요소로 병합.
     """
     graph: Dict[int, Set[int]] = {i: set() for i in range(len(blocks))}
@@ -324,11 +318,9 @@ def build_merge_graph(blocks: List[Dict[str, Any]]) -> Dict[int, Set[int]]:
     for pos, i in enumerate(sorted_indices):
         a = blocks[i]
 
-        # 너무 멀리 있는 블록까지 볼 필요 없음
         for j in sorted_indices[pos + 1:]:
             b = blocks[j]
 
-            # 세로 거리 너무 멀면 break
             if b["y_min"] - a["y_max"] > max(a["height"], b["height"]) * 2.2:
                 break
 
@@ -435,12 +427,6 @@ def build_course_candidates(
     raw_blocks: List[Dict[str, Any]],
     merged_blocks: List[Dict[str, Any]],
 ) -> List[str]:
-    """
-    핵심 변경:
-    - raw_blocks는 주 후보가 아님
-    - merged_blocks를 우선 사용
-    - raw_blocks는 어떤 merged group에도 포함되지 않은 고립 텍스트만 fallback
-    """
     candidates: List[str] = []
 
     merged_source_ids: Set[int] = set()
@@ -448,12 +434,10 @@ def build_course_candidates(
         for sid in block.get("source_ids", []):
             merged_source_ids.add(sid)
 
-    # 1) 병합 결과를 최우선 후보로 사용
     for block in merged_blocks:
         if is_probable_course_candidate(block["display_text"]):
             candidates.append(block["display_text"])
 
-    # 2) 병합에 포함되지 않은 raw block만 fallback 후보로 사용
     for block in raw_blocks:
         if block["id"] in merged_source_ids:
             continue
@@ -476,6 +460,65 @@ def compute_similarity(a: str, b: str) -> float:
         fuzz.token_sort_ratio(na, nb),
     )
     return float(score)
+
+
+def _deduplicate_matched_courses(matched_courses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    best_by_code: Dict[str, Dict[str, Any]] = {}
+
+    for item in matched_courses:
+        course_code = item["course_code"]
+        prev = best_by_code.get(course_code)
+
+        if prev is None or item["score"] > prev["score"]:
+            best_by_code[course_code] = item
+
+    return list(best_by_code.values())
+
+
+def _find_best_course_by_exact_name(db: Session, course_name: str) -> Optional[Course]:
+    return (
+        db.query(Course)
+        .filter(Course.course_name == course_name)
+        .order_by(Course.year.desc(), Course.semester.desc(), Course.course_id.desc())
+        .first()
+    )
+
+
+def apply_cp1_to_cp2_rule(
+    matched_courses: List[Dict[str, Any]],
+    db: Session,
+) -> List[Dict[str, Any]]:
+    """
+    같은 시간표 안에 특정 과목들이 존재하고 동시에 '컴퓨터프로그래밍I'이 잡히면
+    해당 과목을 '컴퓨터프로그래밍II'로 강제 보정.
+    """
+    if not matched_courses:
+        return matched_courses
+
+    matched_names = {item["matched_course_name"] for item in matched_courses}
+
+    has_trigger_course = any(name in matched_names for name in CP2_TRIGGER_COURSES)
+    if not has_trigger_course:
+        return matched_courses
+
+    cp2_course = _find_best_course_by_exact_name(db, "컴퓨터프로그래밍II")
+    if cp2_course is None:
+        return matched_courses
+
+    adjusted: List[Dict[str, Any]] = []
+
+    for item in matched_courses:
+        if item["matched_course_name"] == "컴퓨터프로그래밍I":
+            new_item = dict(item)
+            new_item["matched_course_name"] = cp2_course.course_name
+            new_item["course_code"] = cp2_course.course_code
+            new_item["course_id"] = cp2_course.course_id
+            new_item["rule_applied"] = "cp1_to_cp2_by_timetable_context"
+            adjusted.append(new_item)
+        else:
+            adjusted.append(item)
+
+    return _deduplicate_matched_courses(adjusted)
 
 
 def match_courses_to_db(
@@ -529,21 +572,9 @@ def match_courses_to_db(
             )
 
     matched_courses = _deduplicate_matched_courses(matched_courses)
+    matched_courses = apply_cp1_to_cp2_rule(matched_courses, db)
 
     return matched_courses, ignored_candidates
-
-
-def _deduplicate_matched_courses(matched_courses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    best_by_code: Dict[str, Dict[str, Any]] = {}
-
-    for item in matched_courses:
-        course_code = item["course_code"]
-        prev = best_by_code.get(course_code)
-
-        if prev is None or item["score"] > prev["score"]:
-            best_by_code[course_code] = item
-
-    return list(best_by_code.values())
 
 
 def process_timetable_image(
@@ -594,15 +625,3 @@ def process_timetable_image(
     }
 
     return result
-
-
-def save_ocr_result_json(student_id: int, semester: int, result: Dict[str, Any]) -> str:
-    base_dir = os.path.join("data", "timetable_ocr", str(student_id))
-    os.makedirs(base_dir, exist_ok=True)
-
-    json_path = os.path.join(base_dir, f"{student_id}_{semester}.json")
-
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
-
-    return json_path
