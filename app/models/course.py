@@ -6,7 +6,7 @@ class Course(Base):
     __tablename__ = "courses"
     course_id = Column(Integer, primary_key=True, autoincrement=True)
     course_code = Column(String(20), unique=True, nullable=False)
-    course_name = Column(String(100), nullable=False)
+    course_name = Column(String(255), nullable=False)
     credits = Column(Integer)
     target_grade = Column(String(20))
     is_english = Column(Boolean, default=False)
