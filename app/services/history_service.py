@@ -11,28 +11,26 @@ def get_student_histories(db: Session, student_id: int) -> List[History]:
     """
     특정 학생의 전체 이수 기록을 조회합니다.
     History의 (course_code, year, semester)와 일치하는 Course 정보를 함께 가져옵니다.
+    중복된 과목(분반 등)이 있을 경우 하나만 가져오도록 처리합니다.
     """
-    # History와 Course를 (code, year, semester) 세 가지 조건으로 아우터 조인
-    results = (
-        db.query(History, Course)
-        .outerjoin(
-            Course,
-            (History.course_code == Course.course_code) &
-            (History.year == Course.year) &
-            (History.semester == Course.semester)
+    # 1. 먼저 학생의 모든 History를 가져옵니다.
+    histories = db.query(History).filter(History.student_id == student_id).all()
+
+    for h in histories:
+        # 2. 각 History에 대해 해당하는 Course를 하나만 조회합니다.
+        # (course_code, year, semester)가 일치하는 것 중 첫 번째를 가져옵니다.
+        course = (
+            db.query(Course)
+            .filter(
+                Course.course_code == h.course_code,
+                Course.year == h.year,
+                Course.semester == h.semester
+            )
+            .first()
         )
-        .filter(History.student_id == student_id)
-        .all()
-    )
+        h.course = course
 
-    final_histories = []
-    for history, course in results:
-        # 조인된 Course 객체를 history.course에 수동으로 할당하여 
-        # HistoryResponse 스키마에서 정확한 정보를 가져갈 수 있게 함
-        history.course = course
-        final_histories.append(history)
-
-    return final_histories
+    return histories
 
 
 def add_student_history(
