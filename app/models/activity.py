@@ -11,11 +11,13 @@ class History(Base):
     __tablename__ = "histories"
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(Integer, ForeignKey("users.student_id"))
-    course_code = Column(String(20), ForeignKey("courses.course_code"))
+    course_code = Column(String(20), nullable=False)
+    year = Column(Integer, nullable=True)
+    semester = Column(Integer, nullable=True)
     is_retake = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="histories")
-    course = relationship("Course", back_populates="histories")
+    # course 관계는 서비스 레이어에서 (code, year, semester) 조합으로 수동 조인하여 처리합니다.
 
 class Cart(Base):
     __tablename__ = "carts"

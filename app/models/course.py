@@ -5,7 +5,7 @@ from app.database import Base
 class Course(Base):
     __tablename__ = "courses"
     course_id = Column(Integer, primary_key=True, autoincrement=True)
-    course_code = Column(String(20), unique=True, nullable=False)
+    course_code = Column(String(20), nullable=False)
     course_name = Column(String(255), nullable=False)
     credits = Column(Integer)
     target_grade = Column(String(20))
@@ -19,7 +19,6 @@ class Course(Base):
     course_category = Column(String(50))
 
     details = relationship("CourseDetail", back_populates="course", uselist=False)
-    histories = relationship("History", back_populates="course")
     professor = relationship("Professor", back_populates="courses")
 
 class CourseDetail(Base):

@@ -1,6 +1,7 @@
 import os
 import shutil
 
+from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -23,6 +24,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def upload_course_image(
     file: UploadFile = File(...),
     semester: int = Form(...),
+    year: Optional[int] = Form(None),
     student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ):
@@ -76,12 +78,15 @@ async def upload_course_image(
             db=db,
             student_id=student_id,
             matched_courses=ocr_result["matched_courses"],
+            year=year,
+            semester=semester,
         )
 
         return JSONResponse(
             content={
                 "filename": file_name,
                 "student_id": student_id,
+                "year": year,
                 "semester": semester,
                 "status": "success",
                 "message": f"{semester}학기 시간표 업로드 및 OCR 처리 완료!",
