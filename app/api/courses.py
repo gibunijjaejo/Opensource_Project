@@ -13,7 +13,6 @@ router = APIRouter(prefix="/api/v1/courses", tags=["Courses"])
 def get_courses(
     db: Session = Depends(get_db),
     q: Optional[str] = Query(None, description="강의명, 강의코드, 또는 교수명 검색"),
-    professor: Optional[str] = Query(None, description="교수명 검색"),
     year: Optional[int] = Query(None),
     semester: Optional[int] = Query(None),
     category: Optional[str] = Query(None, description="course_category 필터"),
@@ -25,10 +24,6 @@ def get_courses(
             Course.course_name.ilike(f"%{q}%")
             | Course.course_code.ilike(f"%{q}%")
             | Professor.name.ilike(f"%{q}%")
-        )
-    if professor:
-        query = query.join(Professor, Course.professor_id == Professor.professor_id, isouter=True).filter(
-            Professor.name.ilike(f"%{professor}%")
         )
     if year:
         query = query.filter(Course.year == year)
