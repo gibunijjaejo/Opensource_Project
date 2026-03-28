@@ -12,6 +12,13 @@ class CourseDetailResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ProfessorResponse(BaseModel):
+    professor_id: int
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
 class CourseResponse(BaseModel):
     course_id: int
     course_code: str
@@ -23,6 +30,7 @@ class CourseResponse(BaseModel):
     class_start_time: Optional[str] = None
     class_end_time: Optional[str] = None
     professor_id: Optional[int] = None
+    professor: Optional[ProfessorResponse] = None
     year: Optional[int] = None
     semester: Optional[int] = None
     course_category: Optional[str] = None
