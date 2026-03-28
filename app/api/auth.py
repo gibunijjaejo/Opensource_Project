@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.services import auth_service
 from app.services import user_service
-from app.schemas.auth import EmailRequest, VerifyRequest
+from app.schemas.auth import EmailRequest, VerifyRequest, ResetPasswordRequest
 from app.schemas.user import UserCreate, UserLogin, UserResponse, Token
 from app.database import get_db
 
@@ -76,3 +76,27 @@ def login(req: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
     token = user_service.create_access_token(user.student_id)
     return {"access_token": token, "token_type": "bearer"}
+
+
+@router.post("/reset-password/send-email")
+async def reset_password_send_email(request: EmailRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    if not user_service.get_user_by_email(db, request.email):
+        raise HTTPException(status_code=404, detail="가입되지 않은 이메일입니다.")
+    auth_service.request_password_reset(request.email, background_tasks)
+    return JSONResponse(
+        content={"message": f"{request.email}로 인증번호가 발송되었습니다. (3분 유효)"},
+        headers={"Content-Type": "application/json; charset=utf-8"}
+    )
+
+
+@router.post("/reset-password")
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    if not user_service.get_user_by_email(db, request.email):
+        raise HTTPException(status_code=404, detail="가입되지 않은 이메일입니다.")
+    if not auth_service.verify_reset_code(request.email, request.code):
+        raise HTTPException(status_code=400, detail="인증번호가 일치하지 않거나 만료되었습니다.")
+    user_service.update_password(db, request.email, request.new_password)
+    return JSONResponse(
+        content={"message": "비밀번호가 변경되었습니다."},
+        headers={"Content-Type": "application/json; charset=utf-8"}
+    )

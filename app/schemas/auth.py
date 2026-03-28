@@ -7,3 +7,8 @@ class EmailRequest(BaseModel):
 class VerifyRequest(BaseModel):
     email: str
     code: str
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    code: str
+    new_password: str
