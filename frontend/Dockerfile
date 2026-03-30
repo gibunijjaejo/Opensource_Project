@@ -1,7 +1,7 @@
 FROM node:20-alpine AS base
 
 # pnpm 설치
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
@@ -28,7 +28,6 @@ ENV NODE_ENV=production
 # standalone 빌드 결과물 복사
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
