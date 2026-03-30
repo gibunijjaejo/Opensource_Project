@@ -1,6 +1,7 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api import auth, upload, courses, cart, history
+from app.api import auth, upload, courses, cart, history, users
 from app.database import engine, Base
 from app.models import user, course, professor, activity  # noqa: F401 — Base 테이블 등록용
 
@@ -9,12 +10,21 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="서간표 통합 서버")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 라우터 등록
 app.include_router(auth.router)
 app.include_router(upload.router)
 app.include_router(courses.router)
 app.include_router(cart.router)
 app.include_router(history.router)
+app.include_router(users.router)
 
 @app.get("/")
 async def root():
