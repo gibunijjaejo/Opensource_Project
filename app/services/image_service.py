@@ -5,7 +5,7 @@ import unicodedata
 from typing import Any, Dict, List, Optional, Tuple, Set
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 from paddleocr import PaddleOCR
 from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
@@ -13,9 +13,20 @@ from sqlalchemy.orm import Session
 from app.models.course import Course
 
 
-_OCR_ENGINE: Optional[PaddleOCR] = None
+_OCR_ENGINE_KO: Optional[PaddleOCR] = None
+_OCR_ENGINE_EN: Optional[PaddleOCR] = None
 
 DEFAULT_MATCH_THRESHOLD = 78.0
+
+# OCR 인식 신뢰도 최솟값 — 이 값 미만인 블록은 노이즈로 간주하고 제외
+_MIN_OCR_CONFIDENCE = 0.5
+
+# 듀얼 OCR 병합 파라미터
+# EN 엔진 결과를 신뢰하려면 영어 알파벳 비율·신뢰도가 이 값 이상이어야 함
+_EN_ENGLISH_RATIO_MIN = 0.5
+_EN_CONFIDENCE_MIN    = 0.65
+# 두 블록이 "같은 위치"로 간주되는 IoU 하한
+_IOU_OVERLAP_MIN = 0.3
 
 _WEEKDAY_WORDS = {"월", "화", "수", "목", "금", "토", "일"}
 _WEEKDAY_LONG_WORDS = {
@@ -34,15 +45,39 @@ CP2_TRIGGER_COURSES = {
 }
 
 
-def get_ocr_engine() -> PaddleOCR:
-    global _OCR_ENGINE
-    if _OCR_ENGINE is None:
-        _OCR_ENGINE = PaddleOCR(
-            use_angle_cls=True,
-            lang="korean",
-            show_log=False,
-        )
-    return _OCR_ENGINE
+def get_ocr_engine(lang: str = "korean") -> PaddleOCR:
+    global _OCR_ENGINE_KO, _OCR_ENGINE_EN
+    _OCR_PARAMS = dict(
+        use_angle_cls=True,
+        show_log=False,
+        det_db_thresh=0.2,
+        det_db_box_thresh=0.5,
+        det_db_unclip_ratio=1.8,
+    )
+    if lang == "en":
+        if _OCR_ENGINE_EN is None:
+            _OCR_ENGINE_EN = PaddleOCR(lang="en", **_OCR_PARAMS)
+        return _OCR_ENGINE_EN
+    if _OCR_ENGINE_KO is None:
+        _OCR_ENGINE_KO = PaddleOCR(lang="korean", **_OCR_PARAMS)
+    return _OCR_ENGINE_KO
+
+
+def preprocess_for_ocr(image: Image.Image) -> Image.Image:
+    """
+    OCR 정확도를 높이기 위한 이미지 전처리.
+    1. 해상도가 낮으면 upscale (PaddleOCR은 큰 이미지에서 정확도가 높음)
+    2. 대비(Contrast) 강화
+    3. 선명도(Sharpness) 강화
+    """
+    w, h = image.size
+    if w < 1200:
+        scale = 1200 / w
+        image = image.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+    image = ImageEnhance.Contrast(image).enhance(1.3)
+    image = ImageEnhance.Sharpness(image).enhance(1.5)
+    return image
 
 
 def normalize_course_suffix(text: str) -> str:
@@ -83,6 +118,14 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
+def _english_char_ratio(text: str) -> float:
+    """알파벳 문자 중 영어(ASCII) 비율을 반환합니다."""
+    alpha = [c for c in text if c.isalpha()]
+    if not alpha:
+        return 0.0
+    return sum(1 for c in alpha if c.isascii()) / len(alpha)
+
+
 def clean_display_text(text: str) -> str:
     if not text:
         return ""
@@ -120,10 +163,14 @@ def is_room_like(text: str) -> bool:
     if not norm:
         return False
 
-    if re.fullmatch(r"[a-z]{1,3}\d{2,4}", norm):
+    # 영문 2~3자 + 숫자 2~4자리: AS303, BC12 등 강의실 패턴
+    if re.fullmatch(r"[a-z]{2,3}\d{2,4}", norm):
         return True
-
-    if re.fullmatch(r"\d{2,4}[a-z]{0,1}", norm):
+    # 영문 1자 + 숫자 3~4자리: K401, J3112 등 (숫자 3자리 이상 요구로 오필터 방지)
+    if re.fullmatch(r"[a-z]\d{3,4}", norm):
+        return True
+    # 숫자로 시작하는 강의실: 401, 3011 등
+    if re.fullmatch(r"\d{3,4}[a-z]?", norm):
         return True
 
     return False
@@ -210,53 +257,112 @@ def _bbox_stats(bbox: List[List[float]]) -> Dict[str, float]:
     }
 
 
-def extract_text_blocks(image_path: str) -> List[Dict[str, Any]]:
-    image = Image.open(image_path).convert("RGB")
-    image_array = np.array(image)
+def _bbox_iou(a: Dict[str, Any], b: Dict[str, Any]) -> float:
+    """두 블록 바운딩박스의 IoU(Intersection over Union)를 반환합니다."""
+    x_overlap = min(a["x_max"], b["x_max"]) - max(a["x_min"], b["x_min"])
+    y_overlap = min(a["y_max"], b["y_max"]) - max(a["y_min"], b["y_min"])
+    if x_overlap <= 0 or y_overlap <= 0:
+        return 0.0
+    intersection = x_overlap * y_overlap
+    area_a = a["width"] * a["height"]
+    area_b = b["width"] * b["height"]
+    union = area_a + area_b - intersection
+    return intersection / union if union > 0 else 0.0
 
-    ocr_engine = get_ocr_engine()
-    ocr_result = ocr_engine.ocr(image_array, cls=True)
 
+def _parse_ocr_result(ocr_result) -> List[Dict[str, Any]]:
+    """PaddleOCR 결과를 블록 리스트로 파싱합니다 (id 미부여)."""
     blocks: List[Dict[str, Any]] = []
-
     if not ocr_result:
         return blocks
-
-    idx = 0
     for page in ocr_result:
         if not page:
             continue
-
         for line in page:
             if not line or len(line) < 2:
                 continue
-
             bbox = line[0]
             text_info = line[1]
-
             if not text_info or len(text_info) < 2:
                 continue
-
             raw_text = str(text_info[0]).strip()
             score = float(text_info[1])
-
-            if not raw_text:
+            if not raw_text or score < _MIN_OCR_CONFIDENCE:
                 continue
-
             stats = _bbox_stats(bbox)
+            blocks.append({
+                "text": raw_text,
+                "display_text": clean_display_text(raw_text),
+                "normalized_text": normalize_text(raw_text),
+                "confidence": round(score, 4),
+                "bbox": bbox,
+                **stats,
+            })
+    return blocks
 
-            blocks.append(
-                {
-                    "id": idx,
-                    "text": raw_text,
-                    "display_text": clean_display_text(raw_text),
-                    "normalized_text": normalize_text(raw_text),
-                    "confidence": round(score, 4),
-                    "bbox": bbox,
-                    **stats,
-                }
-            )
-            idx += 1
+
+def _merge_dual_ocr_blocks(
+    ko_blocks: List[Dict[str, Any]],
+    en_blocks: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    KO OCR 결과를 기반으로 EN OCR 결과를 보완합니다.
+
+    Pass 1: KO 블록과 위치가 겹치는 EN 블록이 있고 영어 비율·신뢰도가 기준 이상이면
+            EN 결과로 교체 (KO 엔진이 영어를 오인식하는 문제 보정).
+    Pass 2: KO가 아예 감지하지 못한 고신뢰도 영어 전용 블록은 추가.
+    """
+    result = list(ko_blocks)
+    en_used: Set[int] = set()
+
+    # Pass 1: 겹치는 KO 블록을 EN 블록으로 교체
+    for i, ko_block in enumerate(result):
+        best_iou = 0.0
+        best_en_idx = -1
+        for j, en_block in enumerate(en_blocks):
+            iou = _bbox_iou(ko_block, en_block)
+            if iou > best_iou:
+                best_iou = iou
+                best_en_idx = j
+
+        if best_iou < _IOU_OVERLAP_MIN or best_en_idx < 0:
+            continue
+
+        en_block = en_blocks[best_en_idx]
+        if (
+            _english_char_ratio(en_block["text"]) >= _EN_ENGLISH_RATIO_MIN
+            and en_block["confidence"] >= _EN_CONFIDENCE_MIN
+        ):
+            result[i] = en_block
+            en_used.add(best_en_idx)
+
+    # Pass 2: KO가 놓친 고신뢰도 영어 블록 추가
+    for j, en_block in enumerate(en_blocks):
+        if j in en_used:
+            continue
+        if (
+            _english_char_ratio(en_block["text"]) >= _EN_ENGLISH_RATIO_MIN
+            and en_block["confidence"] >= _EN_CONFIDENCE_MIN
+        ):
+            max_iou = max((_bbox_iou(ko, en_block) for ko in ko_blocks), default=0.0)
+            if max_iou < _IOU_OVERLAP_MIN:
+                result.append(en_block)
+
+    return result
+
+
+def extract_text_blocks(image_path: str) -> List[Dict[str, Any]]:
+    image = Image.open(image_path).convert("RGB")
+    image = preprocess_for_ocr(image)
+    image_array = np.array(image)
+
+    ko_blocks = _parse_ocr_result(get_ocr_engine("korean").ocr(image_array, cls=True))
+    en_blocks = _parse_ocr_result(get_ocr_engine("en").ocr(image_array, cls=True))
+
+    blocks = _merge_dual_ocr_blocks(ko_blocks, en_blocks)
+
+    for idx, block in enumerate(blocks):
+        block["id"] = idx
 
     return blocks
 
@@ -289,14 +395,14 @@ def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     center_diff = abs(a["x_center"] - b["x_center"])
 
     same_column_like = (
-        x_overlap >= 0.35
-        or center_diff <= width_ref * 0.45
+        x_overlap >= 0.25
+        or center_diff <= width_ref * 0.55
     )
 
     if not same_column_like:
         return False
 
-    if vertical_gap > height_ref * 1.9:
+    if vertical_gap > height_ref * 2.2:
         return False
 
     a_norm = normalize_text(a["display_text"])
@@ -447,18 +553,85 @@ def build_course_candidates(
     return deduplicate_course_names(candidates)
 
 
+def extract_year_semester_from_blocks(
+    blocks: List[Dict[str, Any]],
+) -> Tuple[Optional[int], Optional[int]]:
+    """
+    OCR 블록에서 연도·학기를 추출합니다.
+    시간표 상단에 위치한 '2026년 1학기' 형태의 텍스트를 찾습니다.
+
+    - y좌표 기준 상위 20개 블록을 우선 탐색합니다.
+    - 찾지 못하면 전체 블록으로 범위를 확장합니다.
+    - 추출 실패 시 (None, None)을 반환합니다.
+    """
+    if not blocks:
+        return None, None
+
+    year_re = re.compile(r"(\d{4})\s*년")
+    semester_re = re.compile(r"([1-4])\s*학기")
+
+    sorted_by_y = sorted(blocks, key=lambda b: b["y_center"])
+    # 상단 20개 블록 우선, 못 찾으면 전체 탐색
+    search_order = [sorted_by_y[:20], sorted_by_y[20:]]
+
+    found_year: Optional[int] = None
+    found_semester: Optional[int] = None
+
+    for block_group in search_order:
+        for block in block_group:
+            text = block["display_text"]
+
+            if found_year is None:
+                m = year_re.search(text)
+                if m:
+                    found_year = int(m.group(1))
+
+            if found_semester is None:
+                m = semester_re.search(text)
+                if m:
+                    found_semester = int(m.group(1))
+
+        if found_year is not None and found_semester is not None:
+            break
+
+    return found_year, found_semester
+
+
 def compute_similarity(a: str, b: str) -> float:
+    """
+    OCR 후보(a)와 DB 과목명(b)의 유사도를 계산합니다.
+
+    문제: fuzz.partial_ratio는 짧은 문자열이 긴 문자열에 포함될 때 과도하게 높은 점수를 줍니다.
+         예) OCR="기초인공지능프로그래밍", DB="기초인공지능" → partial_ratio=100 (false positive)
+
+    해결:
+    1. DB 과목명(nb)이 OCR 텍스트(na) 안에 완전히 포함되고 OCR이 25% 이상 길면
+       partial_ratio를 완전히 제외하고 ratio/token_sort_ratio만 사용합니다.
+    2. 그 외 경우에는 길이 비율(len_ratio)을 곱해 partial_ratio에 패널티를 적용합니다.
+       → OCR이 잘려 나온 경우(예: "데이터베이" vs "데이터베이스")는 여전히 높은 점수를 줍니다.
+    """
     na = normalize_text(a)
     nb = normalize_text(b)
 
     if not na or not nb:
         return 0.0
 
-    score = max(
-        fuzz.ratio(na, nb),
-        fuzz.partial_ratio(na, nb),
-        fuzz.token_sort_ratio(na, nb),
-    )
+    len_a, len_b = len(na), len(nb)
+
+    ratio_score = fuzz.ratio(na, nb)
+    token_sort_score = fuzz.token_sort_ratio(na, nb)
+    partial_score = fuzz.partial_ratio(na, nb)
+
+    # Case 1: DB 과목명이 OCR 텍스트에 포함되면서 OCR 텍스트가 더 긴 경우
+    # → partial_ratio는 완전히 배제 (substring false positive 방지)
+    if nb in na and len_a > len_b * 1.25:
+        score = max(ratio_score, token_sort_score)
+    else:
+        # Case 2: 길이 차이에 비례해 partial_ratio에 패널티 적용
+        len_ratio = min(len_a, len_b) / max(len_a, len_b)
+        penalized_partial = partial_score * len_ratio
+        score = max(ratio_score, token_sort_score, penalized_partial)
+
     return float(score)
 
 
@@ -521,6 +694,21 @@ def apply_cp1_to_cp2_rule(
     return _deduplicate_matched_courses(adjusted)
 
 
+def _adaptive_threshold(candidate: str, base: float) -> float:
+    """
+    영어 비율이 높은 후보일수록 임계값을 완화합니다.
+    OCR이 영어 알파벳을 1~2자 오인식해도 임계값 미달로 탈락하는 문제를 방지합니다.
+    - 영어 비율 50% 이상: -8점 (최저 65)
+    - 영어 비율 20~50%:  -4점 (최저 70)
+    """
+    ratio = _english_char_ratio(candidate)
+    if ratio >= 0.5:
+        return max(base - 8.0, 65.0)
+    if ratio >= 0.2:
+        return max(base - 4.0, 70.0)
+    return base
+
+
 def match_courses_to_db(
     course_names: List[str],
     db: Session,
@@ -549,7 +737,8 @@ def match_courses_to_db(
             elif score > second_best_score:
                 second_best_score = score
 
-        if best_course and best_score >= threshold:
+        effective_threshold = _adaptive_threshold(candidate, threshold)
+        if best_course and best_score >= effective_threshold:
             matched_courses.append(
                 {
                     "ocr_text": candidate,
@@ -587,8 +776,13 @@ def process_timetable_image(
     candidates = build_course_candidates(raw_blocks, merged_blocks)
     matched_courses, ignored_candidates = match_courses_to_db(candidates, db, threshold=threshold)
 
+    # 시간표 상단에서 연도·학기 자동 추출
+    detected_year, detected_semester = extract_year_semester_from_blocks(raw_blocks)
+
     result = {
         "image_path": image_path,
+        "detected_year": detected_year,
+        "detected_semester": detected_semester,
         "threshold": threshold,
         "raw_block_count": len(raw_blocks),
         "merged_block_count": len(merged_blocks),
