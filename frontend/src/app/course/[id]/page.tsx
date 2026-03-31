@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { ArrowLeft, BookOpen, UserCircle, FileText, Clock } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -16,6 +17,7 @@ type Tab = "syllabus" | "professor"
 
 export default function CourseDetailPage({ params }: Props) {
   const { id } = use(params)
+  const router = useRouter()
   const searchParams = useSearchParams()
   const initialTab = (searchParams.get("tab") === "professor" ? "professor" : "syllabus") as Tab
   const [activeTab, setActiveTab] = useState<Tab>(initialTab)
@@ -23,6 +25,11 @@ export default function CourseDetailPage({ params }: Props) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    const token = localStorage.getItem("access_token")
+    if (!token) {
+      router.replace("/login")
+      return
+    }
     coursesApi.list({ q: id })
       .then((data) => {
         const found = data.find((c) => c.course_code === id) ?? data[0] ?? null
