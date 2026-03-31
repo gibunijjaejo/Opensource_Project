@@ -1,19 +1,18 @@
 # 이미지 처리 로직
 
+import logging
+import os
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional, Tuple, Set
 
-import numpy as np
-from PIL import Image
-from paddleocr import PaddleOCR
+import httpx
 from rapidfuzz import fuzz
 from sqlalchemy.orm import Session
 
 from app.models.course import Course
 
-
-_OCR_ENGINE: Optional[PaddleOCR] = None
+logger = logging.getLogger(__name__)
 
 DEFAULT_MATCH_THRESHOLD = 78.0
 
@@ -32,17 +31,6 @@ CP2_TRIGGER_COURSES = {
     "JAVA언어",
     "딥러닝개론",
 }
-
-
-def get_ocr_engine() -> PaddleOCR:
-    global _OCR_ENGINE
-    if _OCR_ENGINE is None:
-        _OCR_ENGINE = PaddleOCR(
-            use_angle_cls=True,
-            lang="korean",
-            show_log=False,
-        )
-    return _OCR_ENGINE
 
 
 def normalize_course_suffix(text: str) -> str:
@@ -83,6 +71,14 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
+def _english_char_ratio(text: str) -> float:
+    """알파벳 문자 중 영어(ASCII) 비율을 반환합니다."""
+    alpha = [c for c in text if c.isalpha()]
+    if not alpha:
+        return 0.0
+    return sum(1 for c in alpha if c.isascii()) / len(alpha)
+
+
 def clean_display_text(text: str) -> str:
     if not text:
         return ""
@@ -110,20 +106,17 @@ def is_time_like(text: str) -> bool:
 
 
 def is_room_like(text: str) -> bool:
-    """
-    강의실 텍스트처럼 보이는 경우 판별.
-    예: K401, AS303, J311, 401, B12
-    """
     text = clean_display_text(text)
     norm = normalize_text(text)
 
     if not norm:
         return False
 
-    if re.fullmatch(r"[a-z]{1,3}\d{2,4}", norm):
+    if re.fullmatch(r"[a-z]{2,3}\d{2,4}", norm):
         return True
-
-    if re.fullmatch(r"\d{2,4}[a-z]{0,1}", norm):
+    if re.fullmatch(r"[a-z]\d{3,4}", norm):
+        return True
+    if re.fullmatch(r"\d{3,4}[a-z]?", norm):
         return True
 
     return False
@@ -166,10 +159,6 @@ def normalized_is_pure_time_or_index(norm: str, display: str) -> bool:
 
 
 def is_course_line_like(text: str) -> bool:
-    """
-    '과목명의 일부 줄'인지 넉넉하게 판정.
-    예: '문제해결프로', '그래밍실습', '와분석' 같은 줄도 True가 되도록.
-    """
     display = clean_display_text(text)
     norm = normalize_text(display)
 
@@ -189,76 +178,24 @@ def is_course_line_like(text: str) -> bool:
     return True
 
 
-def _bbox_stats(bbox: List[List[float]]) -> Dict[str, float]:
-    xs = [pt[0] for pt in bbox]
-    ys = [pt[1] for pt in bbox]
-
-    x_min = min(xs)
-    x_max = max(xs)
-    y_min = min(ys)
-    y_max = max(ys)
-
-    return {
-        "x_min": x_min,
-        "x_max": x_max,
-        "y_min": y_min,
-        "y_max": y_max,
-        "width": x_max - x_min,
-        "height": y_max - y_min,
-        "x_center": (x_min + x_max) / 2,
-        "y_center": (y_min + y_max) / 2,
-    }
-
-
 def extract_text_blocks(image_path: str) -> List[Dict[str, Any]]:
-    image = Image.open(image_path).convert("RGB")
-    image_array = np.array(image)
-
-    ocr_engine = get_ocr_engine()
-    ocr_result = ocr_engine.ocr(image_array, cls=True)
-
-    blocks: List[Dict[str, Any]] = []
-
-    if not ocr_result:
-        return blocks
-
-    idx = 0
-    for page in ocr_result:
-        if not page:
-            continue
-
-        for line in page:
-            if not line or len(line) < 2:
-                continue
-
-            bbox = line[0]
-            text_info = line[1]
-
-            if not text_info or len(text_info) < 2:
-                continue
-
-            raw_text = str(text_info[0]).strip()
-            score = float(text_info[1])
-
-            if not raw_text:
-                continue
-
-            stats = _bbox_stats(bbox)
-
-            blocks.append(
-                {
-                    "id": idx,
-                    "text": raw_text,
-                    "display_text": clean_display_text(raw_text),
-                    "normalized_text": normalize_text(raw_text),
-                    "confidence": round(score, 4),
-                    "bbox": bbox,
-                    **stats,
-                }
+    """OCR 마이크로서비스를 호출해 이미지에서 텍스트 블록을 추출합니다."""
+    ocr_service_url = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8000")
+    try:
+        with open(image_path, "rb") as f:
+            response = httpx.post(
+                f"{ocr_service_url}/ocr",
+                files={"file": f},
+                timeout=120.0,
             )
-            idx += 1
-
-    return blocks
+        response.raise_for_status()
+        return response.json()["blocks"]
+    except httpx.TimeoutException:
+        logger.error("OCR 서비스 타임아웃: %s", image_path)
+        raise
+    except httpx.HTTPError as e:
+        logger.error("OCR 서비스 HTTP 오류: %s", e)
+        raise
 
 
 def horizontal_overlap_ratio(a: Dict[str, Any], b: Dict[str, Any]) -> float:
@@ -270,9 +207,6 @@ def horizontal_overlap_ratio(a: Dict[str, Any], b: Dict[str, Any]) -> float:
 
 
 def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
-    """
-    같은 셀 내부에서 여러 줄 과목명인지 판정.
-    """
     if not is_course_line_like(a["display_text"]) or not is_course_line_like(b["display_text"]):
         return False
 
@@ -289,14 +223,14 @@ def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     center_diff = abs(a["x_center"] - b["x_center"])
 
     same_column_like = (
-        x_overlap >= 0.35
-        or center_diff <= width_ref * 0.45
+        x_overlap >= 0.25
+        or center_diff <= width_ref * 0.55
     )
 
     if not same_column_like:
         return False
 
-    if vertical_gap > height_ref * 1.9:
+    if vertical_gap > height_ref * 2.2:
         return False
 
     a_norm = normalize_text(a["display_text"])
@@ -309,9 +243,6 @@ def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
 
 
 def build_merge_graph(blocks: List[Dict[str, Any]]) -> Dict[int, Set[int]]:
-    """
-    인접 가능성이 있는 블록들끼리 그래프를 만들어 연결요소로 병합.
-    """
     graph: Dict[int, Set[int]] = {i: set() for i in range(len(blocks))}
     sorted_indices = sorted(range(len(blocks)), key=lambda i: (blocks[i]["y_center"], blocks[i]["x_center"]))
 
@@ -386,9 +317,6 @@ def _merge_group(group: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def merge_nearby_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    같은 시간표 셀 안에서 여러 줄로 끊긴 과목명을 하나로 병합.
-    """
     if not blocks:
         return []
 
@@ -447,6 +375,70 @@ def build_course_candidates(
     return deduplicate_course_names(candidates)
 
 
+def extract_year_semester_from_blocks(
+    blocks: List[Dict[str, Any]],
+) -> Tuple[Optional[int], Optional[int]]:
+    if not blocks:
+        return None, None
+
+    # P1: "XXXX년 X학기" 완전한 패턴
+    full_re = re.compile(r"(20[12][0-9])\s*년[^0-9]{0,8}([1-4])\s*학기")
+    # P2: 연도+숫자 같은 블록 (OCR 오인식 대응)
+    #     "2022E 2l" → 2022년 2학기, "2026 17l" → 2026년 1학기
+    year_sem_re = re.compile(r"(20[12][0-9])[^0-9]{0,6}([1-4])")
+    # P3: "X학기" 단독
+    semester_re = re.compile(r"([1-4])\s*학기")
+    # P4: 연도만 (마지막 fallback)
+    year_re = re.compile(r"(20[12][0-9])(?!\d)")
+
+    sorted_by_y = sorted(blocks, key=lambda b: b["y_center"])
+    search_order = [sorted_by_y[:20], sorted_by_y[20:]]
+
+    found_year: Optional[int] = None
+    found_semester: Optional[int] = None
+
+    for block_group in search_order:
+        for block in block_group:
+            text = block["display_text"]
+
+            # P1
+            if found_year is None or found_semester is None:
+                m = full_re.search(text)
+                if m:
+                    found_year = int(m.group(1))
+                    found_semester = int(m.group(2))
+
+            # P2: 같은 블록에서 연도·학기 번호 동시 추출
+            if found_year is None or found_semester is None:
+                m = year_sem_re.search(text)
+                if m:
+                    y, s = int(m.group(1)), int(m.group(2))
+                    if 2010 <= y <= 2040:
+                        if found_year is None:
+                            found_year = y
+                        if found_semester is None:
+                            found_semester = s
+
+            # P3: 학기만
+            if found_semester is None:
+                m = semester_re.search(text)
+                if m:
+                    found_semester = int(m.group(1))
+
+            # P4: 연도만
+            if found_year is None:
+                m = year_re.search(text)
+                if m:
+                    y = int(m.group(1))
+                    if 2010 <= y <= 2040:
+                        found_year = y
+
+        if found_year is not None and found_semester is not None:
+            break
+
+    return found_year, found_semester
+
+
 def compute_similarity(a: str, b: str) -> float:
     na = normalize_text(a)
     nb = normalize_text(b)
@@ -454,11 +446,19 @@ def compute_similarity(a: str, b: str) -> float:
     if not na or not nb:
         return 0.0
 
-    score = max(
-        fuzz.ratio(na, nb),
-        fuzz.partial_ratio(na, nb),
-        fuzz.token_sort_ratio(na, nb),
-    )
+    len_a, len_b = len(na), len(nb)
+
+    ratio_score = fuzz.ratio(na, nb)
+    token_sort_score = fuzz.token_sort_ratio(na, nb)
+    partial_score = fuzz.partial_ratio(na, nb)
+
+    if nb in na and len_a > len_b * 1.25:
+        score = max(ratio_score, token_sort_score)
+    else:
+        len_ratio = min(len_a, len_b) / max(len_a, len_b)
+        penalized_partial = partial_score * len_ratio
+        score = max(ratio_score, token_sort_score, penalized_partial)
+
     return float(score)
 
 
@@ -488,10 +488,6 @@ def apply_cp1_to_cp2_rule(
     matched_courses: List[Dict[str, Any]],
     db: Session,
 ) -> List[Dict[str, Any]]:
-    """
-    같은 시간표 안에 특정 과목들이 존재하고 동시에 '컴퓨터프로그래밍I'이 잡히면
-    해당 과목을 '컴퓨터프로그래밍II'로 강제 보정.
-    """
     if not matched_courses:
         return matched_courses
 
@@ -519,6 +515,15 @@ def apply_cp1_to_cp2_rule(
             adjusted.append(item)
 
     return _deduplicate_matched_courses(adjusted)
+
+
+def _adaptive_threshold(candidate: str, base: float) -> float:
+    ratio = _english_char_ratio(candidate)
+    if ratio >= 0.5:
+        return max(base - 8.0, 65.0)
+    if ratio >= 0.2:
+        return max(base - 4.0, 70.0)
+    return base
 
 
 def match_courses_to_db(
@@ -549,7 +554,8 @@ def match_courses_to_db(
             elif score > second_best_score:
                 second_best_score = score
 
-        if best_course and best_score >= threshold:
+        effective_threshold = _adaptive_threshold(candidate, threshold)
+        if best_course and best_score >= effective_threshold:
             matched_courses.append(
                 {
                     "ocr_text": candidate,
@@ -587,8 +593,12 @@ def process_timetable_image(
     candidates = build_course_candidates(raw_blocks, merged_blocks)
     matched_courses, ignored_candidates = match_courses_to_db(candidates, db, threshold=threshold)
 
-    result = {
+    detected_year, detected_semester = extract_year_semester_from_blocks(raw_blocks)
+
+    return {
         "image_path": image_path,
+        "detected_year": detected_year,
+        "detected_semester": detected_semester,
         "threshold": threshold,
         "raw_block_count": len(raw_blocks),
         "merged_block_count": len(merged_blocks),
@@ -623,5 +633,3 @@ def process_timetable_image(
             for block in merged_blocks
         ],
     }
-
-    return result
