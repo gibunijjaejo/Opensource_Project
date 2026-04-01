@@ -5,7 +5,7 @@ import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
-import { ArrowLeft, BookOpen, UserCircle, FileText, Clock } from "lucide-react"
+import { ArrowLeft, BookOpen, UserCircle, FileText, Clock, FlaskConical } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { coursesApi } from "@/lib/api"
 import type { Course } from "@/types"
@@ -31,11 +31,8 @@ export default function CourseDetailPage({ params }: Props) {
       router.replace("/login")
       return
     }
-    coursesApi.list({ q: id })
-      .then((data) => {
-        const found = data.find((c) => c.course_code === id) ?? data[0] ?? null
-        setCourse(found)
-      })
+    coursesApi.getByCode(id)
+      .then(setCourse)
       .catch(() => setCourse(null))
       .finally(() => setIsLoading(false))
   }, [id])
@@ -212,21 +209,35 @@ export default function CourseDetailPage({ params }: Props) {
 
               {activeTab === "professor" && (
                 <div className="flex flex-col gap-4">
-                  <div className="rounded-md border border-border bg-muted/30 p-4">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="flex flex-col gap-1.5">
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-3 w-36" />
+                  {course.professor ? (
+                    <div className="rounded-md border border-border bg-card p-5">
+                      <div className="flex items-center gap-3 mb-5">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted flex-shrink-0">
+                          <UserCircle className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{course.professor.name}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">담당 교수</p>
+                        </div>
                       </div>
+
+                      {course.professor.lab ? (
+                        <div className="flex items-start gap-2.5">
+                          <FlaskConical className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-0.5">연구실</p>
+                            <p className="text-sm text-foreground">{course.professor.lab}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">연구실 정보가 등록되지 않았습니다.</p>
+                      )}
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <Skeleton className="h-3 w-full" />
-                      <Skeleton className="h-3 w-5/6" />
-                      <Skeleton className="h-3 w-4/6" />
+                  ) : (
+                    <div className="rounded-md border border-border bg-muted/30 p-5">
+                      <p className="text-sm text-muted-foreground">교수 정보가 없습니다.</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-4">교수 프로필 정보 준비 중입니다.</p>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

@@ -88,6 +88,9 @@ export const coursesApi = {
 
   get: (courseId: number) =>
     request<Course>(`/api/v1/courses/${courseId}`),
+
+  getByCode: (courseCode: string) =>
+    request<Course>(`/api/v1/courses/code/${courseCode}`),
 }
 
 // ── Cart ──────────────────────────────────────────────

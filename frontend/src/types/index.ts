@@ -19,6 +19,7 @@ export interface CourseDetail {
 export interface Professor {
   professor_id: number
   name: string
+  lab: string | null
 }
 
 export interface Course {

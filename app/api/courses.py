@@ -36,9 +36,33 @@ def get_courses(
     return query.all()
 
 
+@router.get("/code/{course_code}", response_model=CourseResponse)
+def get_course_by_code(course_code: str, db: Session = Depends(get_db)):
+    course = (
+        db.query(Course)
+        .options(
+            joinedload(Course.professor),
+            joinedload(Course.details),
+        )
+        .filter(Course.course_code == course_code)
+        .first()
+    )
+    if not course:
+        raise HTTPException(status_code=404, detail="강의를 찾을 수 없습니다.")
+    return course
+
+
 @router.get("/{course_id}", response_model=CourseResponse)
 def get_course(course_id: int, db: Session = Depends(get_db)):
-    course = db.query(Course).filter(Course.course_id == course_id).first()
+    course = (
+        db.query(Course)
+        .options(
+            joinedload(Course.professor),
+            joinedload(Course.details),
+        )
+        .filter(Course.course_id == course_id)
+        .first()
+    )
     if not course:
         raise HTTPException(status_code=404, detail="강의를 찾을 수 없습니다.")
     return course

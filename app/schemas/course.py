@@ -15,6 +15,7 @@ class CourseDetailResponse(BaseModel):
 class ProfessorResponse(BaseModel):
     professor_id: int
     name: str
+    lab: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
