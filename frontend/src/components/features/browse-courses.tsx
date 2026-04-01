@@ -57,7 +57,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProp
               <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 과목명
               </th>
-              <th className="hidden sm:table-cell px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+              <th className="hidden sm:table-cell px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-28">
                 교수
               </th>
               <th className="hidden md:table-cell px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-32">
@@ -107,7 +107,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProp
                       </div>
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3">
-                      <span className="text-xs text-foreground">{course.professor}</span>
+                      <span className="text-xs text-foreground whitespace-nowrap">{course.professor}</span>
                     </td>
                     <td className="hidden md:table-cell px-4 py-3">
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{course.schedule}</span>

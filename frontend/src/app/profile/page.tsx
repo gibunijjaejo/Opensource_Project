@@ -18,6 +18,8 @@ export default function ProfilePage() {
     interests: [] as string[],
     targetCareers: [] as string[],
   })
+  const [semesterInput, setSemesterInput] = useState("")
+  const [semesterError, setSemesterError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -26,15 +28,26 @@ export default function ProfilePage() {
     if (!token) return
     usersApi.me()
       .then((u) => {
-        setProfile((prev) => ({
-          ...prev,
-          name: u.name,
-          studentId: String(u.student_id),
-          semester: u.current_semester || 1,
-        }))
+        const sem = u.current_semester || 1
+        setProfile((prev) => ({ ...prev, name: u.name, studentId: String(u.student_id), semester: sem }))
+        setSemesterInput(`${sem}학기`)
       })
       .catch(() => {})
   }, [])
+
+  const handleSemesterChange = (value: string) => {
+    setSemesterInput(value)
+    setSaved(false)
+    const trimmed = value.trim().replace(/학기$/, "")
+    const num = Number(trimmed)
+    if (!trimmed || isNaN(num) || !Number.isInteger(num) || num < 1) {
+      setSemesterError("입력이 잘못되었습니다")
+    } else {
+      setSemesterError("")
+      setSemesterInput(`${num}학기`)
+      setProfile((prev) => ({ ...prev, semester: num }))
+    }
+  }
 
   const toggleInterest = (interest: string) => {
     setProfile((prev) => ({
@@ -144,7 +157,16 @@ export default function ProfilePage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">현재 학기</label>
-                <Input value={`${profile.semester}학기`} disabled className="bg-muted/50" />
+                <Input
+                  value={semesterInput}
+                  onChange={(e) => setSemesterInput(e.target.value)}
+                  onBlur={(e) => handleSemesterChange(e.target.value)}
+                  placeholder="예: 3 또는 3학기"
+                  className={semesterError ? "border-red-500" : ""}
+                />
+                {semesterError && (
+                  <p className="text-xs text-red-500">{semesterError}</p>
+                )}
               </div>
             </div>
           </section>
