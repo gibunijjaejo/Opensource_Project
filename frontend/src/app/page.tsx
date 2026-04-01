@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap } from "lucide-react"
+import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
 import type { Course } from "@/lib/constants/course-data"
@@ -98,6 +98,11 @@ export default function DashboardPage() {
     } catch {}
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem("access_token")
+    router.replace("/login")
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -119,6 +124,13 @@ export default function DashboardPage() {
                 <User className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{userName || "프로필"}</span>
               </Link>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">로그아웃</span>
+              </button>
               <div className="flex items-center gap-1.5">
                 <BookMarked className="h-3.5 w-3.5" style={{ color: "#B0232A" }} />
                 <span className="text-xs font-medium text-muted-foreground">

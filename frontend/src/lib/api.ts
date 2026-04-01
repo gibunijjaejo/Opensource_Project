@@ -1,4 +1,4 @@
-import { Course, CartItem, Token, User, HistoryItem } from "./types"
+import { Course, CartItem, Token, User, HistoryItem } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
@@ -20,6 +20,10 @@ async function request<T>(
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      localStorage.removeItem("access_token")
+      window.location.href = "/login"
+    }
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || body.message || "요청에 실패했습니다.")
   }
