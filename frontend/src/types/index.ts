@@ -16,6 +16,11 @@ export interface CourseDetail {
   keyword: string | null
 }
 
+export interface Professor {
+  professor_id: number
+  name: string
+}
+
 export interface Course {
   course_id: number
   course_code: string
@@ -27,6 +32,7 @@ export interface Course {
   class_start_time: string | null
   class_end_time: string | null
   professor_id: number | null
+  professor: Professor | null
   year: number | null
   semester: number | null
   course_category: string | null

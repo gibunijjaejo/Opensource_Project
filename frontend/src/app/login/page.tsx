@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { authApi } from "@/lib/api"
 
+type ResetStep = "idle" | "email" | "code" | "done"
+
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
@@ -15,6 +17,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+
+  // 비밀번호 찾기
+  const [resetStep, setResetStep] = useState<ResetStep>("idle")
+  const [resetEmail, setResetEmail] = useState("")
+  const [resetCode, setResetCode] = useState("")
+  const [resetNewPw, setResetNewPw] = useState("")
+  const [resetMsg, setResetMsg] = useState("")
+  const [resetError, setResetError] = useState("")
+  const [resetLoading, setResetLoading] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -26,9 +37,46 @@ export default function LoginPage() {
       router.push("/")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.")
+      setPassword("")
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleSendResetEmail = async () => {
+    setResetLoading(true)
+    setResetError("")
+    try {
+      await authApi.sendResetEmail(resetEmail)
+      setResetMsg("인증번호가 발송되었습니다.")
+      setResetStep("code")
+    } catch (err: unknown) {
+      setResetError(err instanceof Error ? err.message : "이메일 발송에 실패했습니다.")
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const handleResetPassword = async () => {
+    setResetLoading(true)
+    setResetError("")
+    try {
+      await authApi.resetPassword(resetEmail, resetCode, resetNewPw)
+      setResetStep("done")
+    } catch (err: unknown) {
+      setResetError(err instanceof Error ? err.message : "비밀번호 변경에 실패했습니다.")
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const closeReset = () => {
+    setResetStep("idle")
+    setResetEmail("")
+    setResetCode("")
+    setResetNewPw("")
+    setResetMsg("")
+    setResetError("")
   }
 
   return (
@@ -85,6 +133,7 @@ export default function LoginPage() {
                   type="button"
                   className="text-xs hover:underline"
                   style={{ color: "#B0232A" }}
+                  onClick={() => setResetStep("email")}
                 >
                   비밀번호 찾기
                 </button>
@@ -159,6 +208,66 @@ export default function LoginPage() {
           CourseScope - 2026년 1학기
         </p>
       </footer>
+
+      {/* 비밀번호 찾기 모달 */}
+      {resetStep !== "idle" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-lg mx-4">
+            <h2 className="text-base font-semibold text-foreground mb-4">비밀번호 찾기</h2>
+
+            {resetStep === "email" && (
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground">가입한 이메일을 입력하면 인증번호를 보내드립니다.</p>
+                <Input
+                  type="email"
+                  placeholder="student@sogang.ac.kr"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                />
+                {resetError && <p className="text-xs text-red-500">{resetError}</p>}
+                <div className="flex gap-2 mt-1">
+                  <Button variant="outline" className="flex-1" onClick={closeReset}>취소</Button>
+                  <Button className="flex-1" style={{ backgroundColor: "#B0232A" }} onClick={handleSendResetEmail} disabled={resetLoading}>
+                    {resetLoading ? "발송 중..." : "인증번호 발송"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {resetStep === "code" && (
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-muted-foreground">{resetMsg}</p>
+                <Input
+                  placeholder="인증번호 6자리"
+                  value={resetCode}
+                  onChange={(e) => setResetCode(e.target.value)}
+                  maxLength={6}
+                />
+                <Input
+                  type="password"
+                  placeholder="새 비밀번호"
+                  value={resetNewPw}
+                  onChange={(e) => setResetNewPw(e.target.value)}
+                />
+                {resetError && <p className="text-xs text-red-500">{resetError}</p>}
+                <div className="flex gap-2 mt-1">
+                  <Button variant="outline" className="flex-1" onClick={closeReset}>취소</Button>
+                  <Button className="flex-1" style={{ backgroundColor: "#B0232A" }} onClick={handleResetPassword} disabled={resetLoading}>
+                    {resetLoading ? "변경 중..." : "비밀번호 변경"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {resetStep === "done" && (
+              <div className="flex flex-col gap-3 text-center">
+                <p className="text-sm text-foreground">비밀번호가 변경되었습니다.</p>
+                <Button style={{ backgroundColor: "#B0232A" }} onClick={closeReset}>확인</Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

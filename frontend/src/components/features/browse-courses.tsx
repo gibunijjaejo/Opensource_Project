@@ -47,7 +47,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProp
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-md border border-border">
+      <div className="overflow-hidden rounded-md border border-border max-h-[480px] overflow-y-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
