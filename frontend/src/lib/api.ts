@@ -78,10 +78,12 @@ export const authApi = {
 
 // ── Courses ───────────────────────────────────────────
 export const coursesApi = {
-  list: (params?: { q?: string; category?: string }) => {
+  list: (params?: { q?: string; category?: string; year?: number; semester?: number }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set("q", params.q)
     if (params?.category) qs.set("category", params.category)
+    if (params?.year) qs.set("year", String(params.year))
+    if (params?.semester) qs.set("semester", String(params.semester))
     const query = qs.toString() ? `?${qs}` : ""
     return request<Course[]>(`/api/v1/courses${query}`)
   },
