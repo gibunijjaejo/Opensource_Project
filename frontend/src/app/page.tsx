@@ -22,7 +22,7 @@ function mapApiCourse(c: ApiCourse): Course {
     id: c.course_code,
     code: c.course_code,
     name: c.course_name,
-    professor: String(c.professor_id ?? "-"),
+    professor: c.professor?.name ?? "-",
     department: c.course_category ?? "",
     schedule: [c.class_days, c.class_start_time, c.class_end_time]
       .filter(Boolean)
