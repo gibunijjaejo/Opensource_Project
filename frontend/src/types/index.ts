@@ -16,10 +16,16 @@ export interface CourseDetail {
   keyword: string | null
 }
 
+export interface ProfessorDetail {
+  email: string | null
+  lab: string | null
+}
+
 export interface Professor {
   professor_id: number
   name: string
   lab: string | null
+  details: ProfessorDetail | null
 }
 
 export interface Course {

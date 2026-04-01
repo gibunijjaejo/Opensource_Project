@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.database import get_db
 from app.models.course import Course, CourseDetail
-from app.models.professor import Professor
+from app.models.professor import Professor, ProfessorDetail
 from app.schemas.course import CourseResponse
 
 router = APIRouter(prefix="/api/v1/courses", tags=["Courses"])
@@ -41,7 +41,7 @@ def get_course_by_code(course_code: str, db: Session = Depends(get_db)):
     course = (
         db.query(Course)
         .options(
-            joinedload(Course.professor),
+            joinedload(Course.professor).joinedload(Professor.details),
             joinedload(Course.details),
         )
         .filter(Course.course_code == course_code)
@@ -57,7 +57,7 @@ def get_course(course_id: int, db: Session = Depends(get_db)):
     course = (
         db.query(Course)
         .options(
-            joinedload(Course.professor),
+            joinedload(Course.professor).joinedload(Professor.details),
             joinedload(Course.details),
         )
         .filter(Course.course_id == course_id)

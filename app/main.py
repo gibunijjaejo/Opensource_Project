@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api import auth, upload, courses, cart, history, users
+from app.api import auth, upload, courses, cart, history, users, admin
 from app.database import engine, Base
 from app.models import user, course, professor, activity  # noqa: F401 — Base 테이블 등록용
 
@@ -25,6 +25,7 @@ app.include_router(courses.router)
 app.include_router(cart.router)
 app.include_router(history.router)
 app.include_router(users.router)
+app.include_router(admin.router)
 
 @app.get("/")
 async def root():
