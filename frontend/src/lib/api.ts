@@ -62,6 +62,18 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+
+  sendResetEmail: (email: string) =>
+    request<{ message: string }>("/auth/reset-password/send-email", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (email: string, code: string, new_password: string) =>
+    request<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ email, code, new_password }),
+    }),
 }
 
 // ── Courses ───────────────────────────────────────────
