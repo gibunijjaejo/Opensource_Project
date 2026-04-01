@@ -1,4 +1,4 @@
-import { Course, CartItem, Token, User, HistoryItem } from "../types"
+import { Course, CartItem, Token, User, HistoryItem } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
