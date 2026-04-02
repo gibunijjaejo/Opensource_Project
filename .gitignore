@@ -104,5 +104,11 @@ pnpm-debug.log*
 *.db
 static/uploads/*
 
+### 강의계획서 PDF ###
+data/syllabi/*.pdf
+
+### Claude Code ###
+.claude/
+
 ### 중첩 저장소 ###
 Opensource_Project/

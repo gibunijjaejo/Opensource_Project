@@ -1,6 +1,6 @@
-import { Course, CartItem, Token, User, HistoryItem } from "@/types"
+import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary } from "@/types"
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null
@@ -9,12 +9,16 @@ function getToken(): string | null {
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  isMultipart = false
 ): Promise<T> {
   const token = getToken()
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
+  }
+  // multipart/form-data는 브라우저가 Content-Type + boundary를 자동으로 설정
+  if (!isMultipart) {
+    headers["Content-Type"] = "application/json"
   }
   if (token) headers["Authorization"] = `Bearer ${token}`
 
@@ -114,4 +118,34 @@ export const usersApi = {
 // ── History ───────────────────────────────────────────
 export const historyApi = {
   getMyHistories: () => request<HistoryItem[]>("/history/me"),
+
+  add: (data: { course_code: string; year: number; semester: number; is_retake?: boolean }) =>
+    request<HistoryItem>("/history", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  update: (historyId: number, data: { year?: number; semester?: number; is_retake?: boolean }) =>
+    request<HistoryItem>(`/history/${historyId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  remove: (historyId: number) =>
+    request<void>(`/history/${historyId}`, { method: "DELETE" }),
+}
+
+// ── Syllabus ──────────────────────────────────────────
+export const syllabusApi = {
+  summarize: (file: File) => {
+    const formData = new FormData()
+    formData.append("file", file)
+    return request<SyllabusSummary>("/api/v1/syllabus/summarize", {
+      method: "POST",
+      body: formData,
+    }, true)
+  },
+
+  get: (courseId: number) =>
+    request<SyllabusSummary>(`/api/v1/syllabus/${courseId}`),
 }

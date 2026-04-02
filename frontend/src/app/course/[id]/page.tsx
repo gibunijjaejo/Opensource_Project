@@ -31,11 +31,8 @@ export default function CourseDetailPage({ params }: Props) {
       router.replace("/login")
       return
     }
-    coursesApi.list({ q: id })
-      .then((data) => {
-        const found = data.find((c) => c.course_code === id) ?? data[0] ?? null
-        setCourse(found)
-      })
+    coursesApi.get(Number(id))
+      .then(setCourse)
       .catch(() => setCourse(null))
       .finally(() => setIsLoading(false))
   }, [id])
@@ -59,7 +56,7 @@ export default function CourseDetailPage({ params }: Props) {
               <span>대시보드</span>
             </Link>
             <span className="text-border text-muted-foreground/40">/</span>
-            <span className="text-xs text-muted-foreground font-mono">{id}</span>
+            <span className="text-xs text-muted-foreground font-mono">{course?.course_code ?? id}</span>
           </div>
         </div>
       </header>
@@ -197,16 +194,6 @@ export default function CourseDetailPage({ params }: Props) {
                     </div>
                   ) : null}
 
-                  {/* 주차별 계획 — 미구현 skeleton */}
-                  <div className="rounded-md border border-border bg-muted/30 p-4">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">주차별 강의 계획</p>
-                    <div className="flex flex-col gap-2">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <Skeleton key={i} className="h-8 w-full" />
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-3">상세 강의계획서 준비 중입니다.</p>
-                  </div>
                 </div>
               )}
 
