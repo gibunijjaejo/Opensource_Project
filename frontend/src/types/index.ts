@@ -34,6 +34,11 @@ export interface Professor {
   name: string
 }
 
+export interface Professor {
+  professor_id: number
+  name: string
+}
+
 export interface Course {
   course_id: number
   course_code: string
