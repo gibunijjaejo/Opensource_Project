@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, GraduationCap, CheckCircle2, BookOpen, Clock, Loader2 } from "lucide-react"
@@ -181,7 +182,7 @@ export default function GraduationPage() {
       <footer className="mt-12 border-t border-border">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-4">
           <p className="text-xs text-muted-foreground/60 text-center">
-            CourseScope - Graduation Status
+            서간표 - {getCurrentSemester().label}
           </p>
         </div>
       </footer>

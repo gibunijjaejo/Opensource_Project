@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Upload, CheckCircle, GraduationCap, FileImage, BookOpen } from "lucide-react"
@@ -225,7 +226,7 @@ export default function TimetablePage() {
       <footer className="mt-12 border-t border-border">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 py-4">
           <p className="text-xs text-muted-foreground/60 text-center">
-            CourseScope - 2026년 1학기
+            서간표 - {getCurrentSemester().label}
           </p>
         </div>
       </footer>
