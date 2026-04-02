@@ -110,10 +110,10 @@ export default function CourseDetailPage({ params }: Props) {
 
               {/* Meta Row */}
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground">
-                {course.professor_id && (
+                {(course.professor?.name || course.professor_id) && (
                   <div className="flex items-center gap-1.5">
                     <UserCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span>교수 ID: {course.professor_id}</span>
+                    <span>{course.professor?.name ?? `교수 ID: ${course.professor_id}`}</span>
                   </div>
                 )}
                 {(course.class_days || course.class_start_time) && (

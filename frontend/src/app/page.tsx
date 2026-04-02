@@ -47,7 +47,7 @@ export default function DashboardPage() {
       return
     }
 
-    coursesApi.list()
+    coursesApi.list({ year: 2026, semester: 1 })
       .then((data) => setCourses(data.map(mapApiCourse)))
       .catch(() => {})
       .finally(() => setIsLoading(false))
