@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { BookOpen, Mail, Lock, User, Eye, EyeOff, GraduationCap } from "lucide-react"
@@ -79,7 +80,7 @@ export default function SignupPage() {
           <div className="flex h-14 items-center justify-center">
             <Link href="/" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-              <span className="text-sm font-semibold text-foreground tracking-tight">CourseScope</span>
+              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
             </Link>
           </div>
         </div>
@@ -94,7 +95,7 @@ export default function SignupPage() {
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {step === "form"
-                ? "CourseScope에 가입하고 수강 계획을 시작하세요"
+                ? "서간표에 가입하고 수강 계획을 시작하세요"
                 : `${formData.email}로 발송된 인증번호를 입력하세요`}
             </p>
           </div>
@@ -278,7 +279,7 @@ export default function SignupPage() {
 
       <footer className="border-t border-border py-4">
         <p className="text-xs text-muted-foreground/60 text-center">
-          CourseScope - 2026년 1학기
+          서간표 - {getCurrentSemester().label}
         </p>
       </footer>
     </div>

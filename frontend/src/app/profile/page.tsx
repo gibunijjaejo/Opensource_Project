@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { ArrowLeft, User, Save, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -294,7 +295,7 @@ export default function ProfilePage() {
       <footer className="mt-12 border-t border-border">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-4">
           <p className="text-xs text-muted-foreground/60 text-center">
-            CourseScope - 2026년 1학기
+            서간표 - {getCurrentSemester().label}
           </p>
         </div>
       </footer>

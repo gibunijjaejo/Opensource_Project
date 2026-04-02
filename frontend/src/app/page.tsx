@@ -8,6 +8,7 @@ import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
 import type { Course } from "@/lib/constants/course-data"
 import { coursesApi, cartApi, usersApi, historyApi } from "@/lib/api"
+import { getCurrentSemester } from "@/lib/utils"
 import type { Course as ApiCourse, CartItem, HistoryItem } from "@/types"
 
 // API 응답 → 컴포넌트가 기대하는 Course 타입으로 변환
@@ -103,9 +104,9 @@ export default function DashboardPage() {
           <div className="flex h-14 items-center justify-between">
             <div className="flex items-center gap-2.5">
               <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-              <span className="text-sm font-semibold text-foreground tracking-tight">CourseScope</span>
+              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
               <span className="hidden sm:inline text-xs text-muted-foreground font-mono border-l border-border pl-2.5 ml-0.5">
-                2026년 1학기
+                {getCurrentSemester().label}
               </span>
             </div>
             <div className="flex items-center gap-3">
@@ -250,7 +251,7 @@ export default function DashboardPage() {
       <footer className="mt-12 border-t border-border">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-4">
           <p className="text-xs text-muted-foreground/60 text-center">
-            CourseScope - 2026년 1학기
+            서간표 - {getCurrentSemester().label}
           </p>
         </div>
       </footer>
