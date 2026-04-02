@@ -25,9 +25,11 @@ class CourseDetail(Base):
     __tablename__ = "course_details"
     course_id = Column(Integer, ForeignKey("courses.course_id"), primary_key=True)
     required_skills = Column(Text)
-    evaluation_method = Column(String(100))
-    teaching_method = Column(String(50))
+    evaluation_method = Column(Text)
+    teaching_method = Column(Text)
     track_id = Column(Integer, ForeignKey("tracks.track_id"))
     keyword = Column(String(255))
+    overview = Column(Text, nullable=True)
+    pdf_hash = Column(String(64), nullable=True)
 
     course = relationship("Course", back_populates="details")

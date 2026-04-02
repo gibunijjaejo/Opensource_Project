@@ -16,6 +16,7 @@ class ProfessorDetailResponse(BaseModel):
     email: Optional[str] = None
     specialty: Optional[str] = None
     research_area: Optional[str] = None
+    research_summary: Optional[str] = None
     homepage: Optional[str] = None
 
     model_config = {"from_attributes": True}

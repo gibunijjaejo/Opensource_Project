@@ -19,6 +19,7 @@ class ProfessorDetail(Base):
     email = Column(String(100))
     specialty = Column(String(255))
     research_area = Column(Text)
+    research_summary = Column(Text)
     homepage = Column(String(255))
 
     professor = relationship("Professor", back_populates="details")

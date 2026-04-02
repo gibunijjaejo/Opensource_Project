@@ -14,12 +14,31 @@ export interface CourseDetail {
   evaluation_method: string | null
   teaching_method: string | null
   keyword: string | null
+  overview: string | null
+  pdf_hash: string | null
+}
+
+export interface SyllabusSummary {
+  course_id: number
+  course_code: string | null
+  year: number | null
+  semester: number | null
+  overview: string | null
+  goals: string | null
+  evaluation_method: string | null
+  cached: boolean
+}
+
+export interface Professor {
+  professor_id: number
+  name: string
 }
 
 export interface ProfessorDetail {
   email: string | null
   specialty: string | null
   research_area: string | null
+  research_summary: string | null
   homepage: string | null
 }
 
