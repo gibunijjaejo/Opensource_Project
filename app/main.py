@@ -25,6 +25,9 @@ app.include_router(courses.router)
 app.include_router(cart.router)
 app.include_router(history.router)
 app.include_router(users.router)
+app.include_router(admin.router)
+app.include_router(syllabus.router)
+app.include_router(syllabus.router)
 
 @app.get("/")
 async def root():
