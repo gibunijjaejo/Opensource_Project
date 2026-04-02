@@ -21,6 +21,7 @@ import {
 // ─── 내부 모듈 ────────────────────────────────────────────────────────────────
 import { getCurrentSemester } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { coursesApi } from "@/lib/api";
 import type { Course } from "@/types";
 
@@ -62,7 +63,7 @@ function ResearchAreaCard({ summary }: { summary: string }) {
                 }
             >
                 <div className="ai-border-wrap rounded-lg p-[2px]">
-                    <div className="rounded-lg p-3" style={{ background: "#7c3aed08" }}>
+                    <div className="rounded-lg bg-card p-3">
                         <div className="flex items-center gap-2 mb-2">
                             <span
                                 className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium"
@@ -147,6 +148,9 @@ export default function CourseDetailPage({ params }: Props) {
                         <span className="text-xs text-muted-foreground font-mono">
                             {course?.course_code ?? id}
                         </span>
+                        <div className="ml-auto">
+                            <ThemeToggle />
+                        </div>
                     </div>
                 </div>
             </header>
