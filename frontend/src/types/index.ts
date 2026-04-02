@@ -18,7 +18,9 @@ export interface CourseDetail {
 
 export interface ProfessorDetail {
   email: string | null
-  lab: string | null
+  specialty: string | null
+  research_area: string | null
+  homepage: string | null
 }
 
 export interface Professor {

@@ -27,3 +27,16 @@ def crawl_professors(
     - db_only: DB에는 있지만 웹에 없는 교수 (변경 없음)
     """
     return crawl_and_upsert(db)
+
+
+@router.get("/crawl/professors/test")
+def test_crawl_professor(
+    url: str,
+    _: None = Depends(verify_admin),
+):
+    """단일 교수 상세 페이지 파싱 결과 확인 (DB 저장 없음)"""
+    from app.services.crawl_service import _parse_detail_page
+    try:
+        return _parse_detail_page(url)
+    except Exception as e:
+        return {"error": str(e)}

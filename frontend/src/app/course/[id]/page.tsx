@@ -5,7 +5,7 @@ import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
-import { ArrowLeft, BookOpen, UserCircle, FileText, Clock, FlaskConical, Mail } from "lucide-react"
+import { ArrowLeft, BookOpen, UserCircle, FileText, Clock, FlaskConical, Mail, Globe, Microscope } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { coursesApi } from "@/lib/api"
 import type { Course } from "@/types"
@@ -222,14 +222,21 @@ export default function CourseDetailPage({ params }: Props) {
                       </div>
 
                       <div className="flex flex-col gap-3">
-                        {(course.professor.details?.lab || course.professor.lab) && (
+                        {course.professor.details?.specialty && (
+                          <div className="flex items-start gap-2.5">
+                            <Microscope className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-0.5">세부전공</p>
+                              <p className="text-sm text-foreground">{course.professor.details.specialty}</p>
+                            </div>
+                          </div>
+                        )}
+                        {course.professor.lab && (
                           <div className="flex items-start gap-2.5">
                             <FlaskConical className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
                             <div>
                               <p className="text-xs font-medium text-muted-foreground mb-0.5">연구실</p>
-                              <p className="text-sm text-foreground">
-                                {course.professor.details?.lab ?? course.professor.lab}
-                              </p>
+                              <p className="text-sm text-foreground">{course.professor.lab}</p>
                             </div>
                           </div>
                         )}
@@ -248,7 +255,33 @@ export default function CourseDetailPage({ params }: Props) {
                             </div>
                           </div>
                         )}
-                        {!course.professor.details?.lab && !course.professor.lab && !course.professor.details?.email && (
+                        {course.professor.details?.homepage && (
+                          <div className="flex items-start gap-2.5">
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-0.5">홈페이지</p>
+                              <a
+                                href={course.professor.details.homepage}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm hover:underline"
+                                style={{ color: "#B0232A" }}
+                              >
+                                {course.professor.details.homepage}
+                              </a>
+                            </div>
+                          </div>
+                        )}
+                        {course.professor.details?.research_area && (
+                          <div className="rounded-md border border-border bg-muted/30 p-3 mt-1">
+                            <p className="text-xs font-medium text-muted-foreground mb-1.5">연구분야</p>
+                            <p className="text-sm text-foreground leading-relaxed">
+                              {course.professor.details.research_area}
+                            </p>
+                          </div>
+                        )}
+                        {!course.professor.lab &&
+                          !course.professor.details?.email && !course.professor.details?.specialty && (
                           <p className="text-xs text-muted-foreground">연구실 정보가 등록되지 않았습니다.</p>
                         )}
                       </div>

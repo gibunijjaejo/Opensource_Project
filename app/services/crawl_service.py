@@ -15,13 +15,20 @@ def _fetch(url: str) -> BeautifulSoup:
     return BeautifulSoup(res.text, "html.parser")
 
 
+def _normalize(text: str) -> str:
+    """&nbsp; 등 공백 문자 정규화"""
+    return text.replace("\xa0", " ").strip()
+
+
 def _extract_text_after_label(td, label: str) -> str | None:
-    """<b>label</b> 바로 뒤 텍스트 노드를 반환"""
-    for b in td.find_all("b"):
-        if label in b.get_text():
-            node = b.next_sibling
+    """<b> 또는 <strong> label 바로 뒤 텍스트 노드를 반환"""
+    for tag in td.find_all(["b", "strong"]):
+        tag_text = _normalize(tag.get_text())
+        if label in tag_text:
+            node = tag.next_sibling
             while node:
-                text = str(node).strip().lstrip(":").strip()
+                text = _normalize(str(node) if not hasattr(node, "get_text") else node.get_text())
+                text = text.lstrip(":").strip()
                 if text:
                     return text
                 node = node.next_sibling
@@ -31,7 +38,7 @@ def _extract_text_after_label(td, label: str) -> str | None:
 def _parse_detail_page(url: str) -> dict:
     soup = _fetch(url)
     rows = soup.select("div.table_gsis table tr")
-    result = {"name": None, "email": None, "lab": None}
+    result = {"name": None, "email": None, "lab": None, "specialty": None, "research_area": None, "homepage": None}
 
     if not rows:
         return result
@@ -53,10 +60,50 @@ def _parse_detail_page(url: str) -> dict:
             or _extract_text_after_label(info_td, "연구실")
         )
 
-        # 이메일
+        # 세부전공
+        result["specialty"] = (
+            _extract_text_after_label(info_td, "세부전공")
+            or _extract_text_after_label(info_td, "전공")
+        )
+
+        # 이메일 — mailto 링크 또는 평문 텍스트 둘 다 처리
         mailto = info_td.find("a", href=lambda h: h and h.startswith("mailto:"))
         if mailto:
             result["email"] = mailto.get_text(strip=True)
+        else:
+            result["email"] = (
+                _extract_text_after_label(info_td, "e-mail")
+                or _extract_text_after_label(info_td, "Email")
+                or _extract_text_after_label(info_td, "E-mail")
+            )
+
+    # 연구실 소개 섹션 — 행 인덱스 대신 "연구분야" 텍스트가 있는 행을 탐색
+    for row in rows[1:]:
+        row_text = row.get_text()
+        if "연구분야" not in row_text and "홈페이지" not in row_text:
+            continue
+        detail_td = row.find("td")
+        if not detail_td:
+            continue
+
+        # 홈페이지 — href가 http로 시작하는 첫 번째 a 태그
+        for a_tag in detail_td.find_all("a", href=True):
+            href = a_tag.get("href", "")
+            if href.startswith("http"):
+                result["homepage"] = href
+                break
+
+        # 연구분야 — "연구분야" 이후 텍스트 전체 추출
+        full_text = detail_td.get_text(separator="\n")
+        full_text = _normalize(full_text)
+        if "연구분야" in full_text:
+            after = full_text.split("연구분야", maxsplit=1)[1]
+            after = after.lstrip(":\n ").strip()
+            lines = [line.strip() for line in after.splitlines() if line.strip() and line.strip() not in ("\xa0", "")]
+            text = " ".join(lines)
+            if text:
+                result["research_area"] = text
+        break
 
     return result
 
@@ -110,26 +157,38 @@ def crawl_and_upsert(db: Session) -> dict:
 
     for wp in web_professors:
         web_name = wp["name"]
+        match_type = None
+        matched_db_name = None
 
         # 1. 정확히 일치하는 교수 찾기
         matched_professor = db_name_map.get(web_name)
+        if matched_professor:
+            match_type = "exact"
+            matched_db_name = web_name
 
         # 2. 없으면 fuzzy 매칭 (score >= 85)
         if not matched_professor and db_names:
-            result = process.extractOne(web_name, db_names, scorer=fuzz.ratio)
-            if result and result[1] >= 85:
-                matched_professor = db_name_map[result[0]]
+            fuzzy_result = process.extractOne(web_name, db_names, scorer=fuzz.ratio)
+            if fuzzy_result and fuzzy_result[1] >= 85:
+                matched_professor = db_name_map[fuzzy_result[0]]
+                match_type = "fuzzy"
+                matched_db_name = fuzzy_result[0]
 
         if not matched_professor:
-            not_found_in_db.append(web_name)
+            not_found_in_db.append({
+                "web_name": web_name,
+                "detail_url": wp["detail_url"],
+            })
             continue
 
         # 상세 페이지 크롤링
+        crawl_error = None
         detail = {}
         if wp["detail_url"]:
             try:
                 detail = _parse_detail_page(wp["detail_url"])
-            except Exception:
+            except Exception as e:
+                crawl_error = str(e)
                 detail = {}
 
         # professor_details upsert
@@ -140,16 +199,33 @@ def crawl_and_upsert(db: Session) -> dict:
         if existing:
             existing.name = detail.get("name") or web_name
             existing.email = detail.get("email")
-            existing.lab = detail.get("lab")
+            existing.specialty = detail.get("specialty")
+            existing.research_area = detail.get("research_area")
+            existing.homepage = detail.get("homepage")
         else:
             db.add(ProfessorDetail(
                 professor_id=matched_professor.professor_id,
                 name=detail.get("name") or web_name,
                 email=detail.get("email"),
-                lab=detail.get("lab"),
+                specialty=detail.get("specialty"),
+                research_area=detail.get("research_area"),
+                homepage=detail.get("homepage"),
             ))
 
-        updated.append(web_name)
+        updated.append({
+            "web_name": web_name,
+            "db_name": matched_db_name,
+            "match_type": match_type,
+            "detail_url": wp["detail_url"],
+            "crawl_error": crawl_error,
+            "saved": {
+                "name": detail.get("name"),
+                "email": detail.get("email"),
+                "specialty": detail.get("specialty"),
+                "research_area": detail.get("research_area"),
+                "homepage": detail.get("homepage"),
+            },
+        })
 
     db.commit()
 
@@ -163,6 +239,8 @@ def crawl_and_upsert(db: Session) -> dict:
 
     return {
         "updated_count": len(updated),
+        "not_found_count": len(not_found_in_db),
+        "db_only_count": len(db_only),
         "updated": updated,
         "not_found_in_db": not_found_in_db,
         "db_only": db_only,
