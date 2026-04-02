@@ -19,7 +19,7 @@ function mapApiCourse(c: ApiCourse): Course {
     일반선택: "일반선택",
   }
   return {
-    id: c.course_code,
+    id: String(c.course_id),
     code: c.course_code,
     name: c.course_name,
     professor: c.professor?.name ?? "-",
@@ -63,28 +63,20 @@ export default function DashboardPage() {
   }, [router])
 
   const wishlistIds = new Set(
-    cartItems.map((item) => item.course?.course_code ?? String(item.course_id))
+    cartItems.map((item) => String(item.course_id))
   )
-  // cartId 역조회용 맵 (courseCode → cartItemId)
+  // cartId 역조회용 맵 (course_id → cartItemId)
   const cartIdMap = new Map(
-    cartItems.map((item) => [
-      item.course?.course_code ?? String(item.course_id),
-      item.id,
-    ])
+    cartItems.map((item) => [String(item.course_id), item.id])
   )
 
   const wishlistedCourses = courses.filter((c) => wishlistIds.has(c.id))
 
   const addToWishlist = async (id: string) => {
-    const apiCourse = courses.find((c) => c.id === id)
-    if (!apiCourse) return
     const token = localStorage.getItem("access_token")
     if (!token) return
     try {
-      const fullCourseList = await coursesApi.list()
-      const found = fullCourseList.find((c) => c.course_code === id)
-      if (!found) return
-      const newItem = await cartApi.add(found.course_id)
+      const newItem = await cartApi.add(Number(id))
       setCartItems((prev) => [...prev, newItem])
     } catch {/* 이미 추가됨 등 */}
   }
