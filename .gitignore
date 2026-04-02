@@ -104,5 +104,8 @@ pnpm-debug.log*
 *.db
 static/uploads/*
 
+### 강의계획서 PDF ###
+data/syllabi/*.pdf
+
 ### 중첩 저장소 ###
 Opensource_Project/

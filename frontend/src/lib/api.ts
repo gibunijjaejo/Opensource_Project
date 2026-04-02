@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary } from "../types"
-=======
-import { Course, CartItem, Token, User, HistoryItem } from "@/types"
->>>>>>> upstream/dev
+import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
@@ -71,13 +67,6 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }),
 
-<<<<<<< HEAD
-  logout: () => {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("access_token")
-    }
-  },
-=======
   sendResetEmail: (email: string) =>
     request<{ message: string }>("/auth/reset-password/send-email", {
       method: "POST",
@@ -89,7 +78,6 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, code, new_password }),
     }),
->>>>>>> upstream/dev
 }
 
 // ── Courses ───────────────────────────────────────────
