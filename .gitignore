@@ -103,3 +103,6 @@ pnpm-debug.log*
 ### DB ###
 *.db
 static/uploads/*
+
+### 중첩 저장소 ###
+Opensource_Project/

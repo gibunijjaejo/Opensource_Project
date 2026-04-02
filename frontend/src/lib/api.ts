@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary } from "../types"
+=======
+import { Course, CartItem, Token, User, HistoryItem } from "@/types"
+>>>>>>> upstream/dev
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
@@ -24,6 +28,10 @@ async function request<T>(
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      localStorage.removeItem("access_token")
+      window.location.href = "/login"
+    }
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || body.message || "요청에 실패했습니다.")
   }
@@ -63,19 +71,35 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     }),
 
+<<<<<<< HEAD
   logout: () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("access_token")
     }
   },
+=======
+  sendResetEmail: (email: string) =>
+    request<{ message: string }>("/auth/reset-password/send-email", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (email: string, code: string, new_password: string) =>
+    request<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ email, code, new_password }),
+    }),
+>>>>>>> upstream/dev
 }
 
 // ── Courses ───────────────────────────────────────────
 export const coursesApi = {
-  list: (params?: { q?: string; category?: string }) => {
+  list: (params?: { q?: string; category?: string; year?: number; semester?: number }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set("q", params.q)
     if (params?.category) qs.set("category", params.category)
+    if (params?.year) qs.set("year", String(params.year))
+    if (params?.semester) qs.set("semester", String(params.semester))
     const query = qs.toString() ? `?${qs}` : ""
     return request<Course[]>(`/api/v1/courses${query}`)
   },

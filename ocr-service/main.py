@@ -19,7 +19,7 @@ _OCR_ENGINE_KO: Optional[PaddleOCR] = None
 _OCR_ENGINE_EN: Optional[PaddleOCR] = None
 
 _OCR_PARAMS = dict(
-    use_angle_cls=False,   # 시간표는 항상 수평 → 각도 분류 불필요 (속도 개선)
+    use_angle_cls=True,
     show_log=False,
     det_db_thresh=0.2,
     det_db_box_thresh=0.5,
@@ -211,8 +211,8 @@ async def run_ocr(file: UploadFile = File(...)):
     image = preprocess_for_ocr(image)
     image_array = np.array(image)
 
-    ko_blocks = _parse_ocr_result(get_ocr_engine("korean").ocr(image_array, cls=False))
-    en_blocks = _parse_ocr_result(get_ocr_engine("en").ocr(image_array, cls=False))
+    ko_blocks = _parse_ocr_result(get_ocr_engine("korean").ocr(image_array, cls=True))
+    en_blocks = _parse_ocr_result(get_ocr_engine("en").ocr(image_array, cls=True))
     blocks = _merge_dual_ocr_blocks(ko_blocks, en_blocks)
 
     for idx, block in enumerate(blocks):
