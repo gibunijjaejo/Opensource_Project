@@ -34,9 +34,19 @@ export interface Professor {
   name: string
 }
 
+export interface ProfessorDetail {
+  email: string | null
+  specialty: string | null
+  research_area: string | null
+  research_summary: string | null
+  homepage: string | null
+}
+
 export interface Professor {
   professor_id: number
   name: string
+  lab: string | null
+  details: ProfessorDetail | null
 }
 
 export interface Course {

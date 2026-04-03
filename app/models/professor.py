@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -17,6 +17,9 @@ class ProfessorDetail(Base):
     professor_id = Column(Integer, ForeignKey("professors.professor_id"), primary_key=True)
     name = Column(String(100))
     email = Column(String(100))
-    lab = Column(String(100))
+    specialty = Column(String(255))
+    research_area = Column(Text)
+    research_summary = Column(Text)
+    homepage = Column(String(255))
 
     professor = relationship("Professor", back_populates="details")
