@@ -107,6 +107,10 @@ static/uploads/*
 ### 강의계획서 PDF ###
 data/syllabi/*.pdf
 
+### OCR 평가 데이터셋 ###
+dataset/images/
+eval_result*.txt
+
 ### Claude Code ###
 .claude/
 

@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 from fastapi import FastAPI, File, UploadFile
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFilter
 from paddleocr import PaddleOCR
 
 
@@ -23,7 +23,7 @@ _OCR_PARAMS = dict(
     show_log=False,
     det_db_thresh=0.2,
     det_db_box_thresh=0.5,
-    det_db_unclip_ratio=1.8,
+    det_db_unclip_ratio=2.0,  # 카드 내 줄바꿈 텍스트 박스 확장 강화
 )
 
 
@@ -181,11 +181,20 @@ def _merge_dual_ocr_blocks(
 
 def preprocess_for_ocr(image: Image.Image) -> Image.Image:
     w, h = image.size
-    if w < 1200:
-        scale = 1200 / w
+    # 짧은 변 기준 1600px 이상 확보 (모바일 세로/가로 모두 대응)
+    min_side = min(w, h)
+    if min_side < 800:
+        scale = 1600 / min_side
         image = image.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-    image = ImageEnhance.Contrast(image).enhance(1.3)
-    image = ImageEnhance.Sharpness(image).enhance(1.5)
+    elif max(w, h) < 1600:
+        scale = 1600 / max(w, h)
+        image = image.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+
+    # 파스텔 배경의 카드 텍스트 가독성 향상
+    image = ImageEnhance.Contrast(image).enhance(1.5)
+    image = ImageEnhance.Sharpness(image).enhance(2.5)
+    # 미세 엣지 강화 (작은 글자 윤곽선 보조)
+    image = image.filter(ImageFilter.SHARPEN)
     return image
 
 
