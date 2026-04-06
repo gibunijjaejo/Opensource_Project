@@ -21,6 +21,7 @@ import {
 // ─── 내부 모듈 ────────────────────────────────────────────────────────────────
 import { getCurrentSemester } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { coursesApi } from "@/lib/api";
 import type { Course } from "@/types";
 
@@ -147,6 +148,9 @@ export default function CourseDetailPage({ params }: Props) {
                         <span className="text-xs text-muted-foreground font-mono">
                             {course?.course_code ?? id}
                         </span>
+                        <div className="ml-auto">
+                            <ThemeToggle />
+                        </div>
                     </div>
                 </div>
             </header>
