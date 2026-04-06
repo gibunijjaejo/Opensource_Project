@@ -9,6 +9,7 @@ import { BrowseCourses } from "@/components/features/browse-courses"
 import type { Course } from "@/lib/constants/course-data"
 import { coursesApi, cartApi, usersApi, historyApi } from "@/lib/api"
 import { getCurrentSemester } from "@/lib/utils"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 import type { Course as ApiCourse, CartItem, HistoryItem } from "@/types"
 
 // API 응답 → 컴포넌트가 기대하는 Course 타입으로 변환
@@ -130,6 +131,7 @@ export default function DashboardPage() {
                   {wishlistIds.size}개 저장
                 </span>
               </div>
+              <ThemeToggle />
             </div>
           </div>
         </div>
