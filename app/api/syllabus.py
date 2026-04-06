@@ -1,10 +1,23 @@
+import hashlib
+from pathlib import Path
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.course import Course, CourseDetail
 from app.schemas.syllabus import SyllabusSummaryResponse
 from app.services import syllabus_service
+
+def _find_pdf_by_hash(target_hash: str) -> Optional[Path]:
+    syllabi_dir = Path("data/syllabi")
+    if syllabi_dir.exists():
+        for f in syllabi_dir.glob("*.pdf"):
+            if hashlib.sha256(f.read_bytes()).hexdigest() == target_hash:
+                return f
+    return None
 
 router = APIRouter(prefix="/api/v1/syllabus", tags=["Syllabus"])
 
@@ -33,6 +46,19 @@ async def summarize_syllabus(
     file_bytes = await file.read()
     detail, course, cached = syllabus_service.process_syllabus(db, file_bytes)
     return _build_response(detail, course, cached)
+
+
+@router.get("/{course_id}/pdf")
+def get_syllabus_pdf(course_id: int, db: Session = Depends(get_db)):
+    detail = db.query(CourseDetail).filter(CourseDetail.course_id == course_id).first()
+    if not detail or not detail.pdf_hash:
+        raise HTTPException(status_code=404, detail="강의계획서 PDF가 없습니다")
+
+    pdf_path = _find_pdf_by_hash(detail.pdf_hash)
+    if not pdf_path:
+        raise HTTPException(status_code=404, detail="PDF 파일을 찾을 수 없습니다")
+
+    return FileResponse(str(pdf_path), media_type="application/pdf")
 
 
 @router.get("/{course_id}", response_model=SyllabusSummaryResponse)
