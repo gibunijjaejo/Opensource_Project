@@ -290,6 +290,18 @@ export default function CourseDetailPage({ params }: Props) {
                                     {/* 필요 역량 / 평가 방식 / 수업 방식 / 키워드 */}
                                     {course.details ? (
                                         <div className="flex flex-col gap-4">
+                                            {course.details.pdf_hash && (
+                                                <a
+                                                    href={`${process.env.NEXT_PUBLIC_API_URL}/api/v1/syllabus/${course.course_id}/pdf`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-md border text-xs font-medium transition-colors hover:opacity-80"
+                                                    style={{ borderColor: "#B0232A", color: "#B0232A" }}
+                                                >
+                                                    <FileText className="h-3.5 w-3.5" />
+                                                    강의계획서 보러가기
+                                                </a>
+                                            )}
                                             {course.details.required_skills && (
                                                 <div className="rounded-md border border-border bg-card p-4">
                                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
