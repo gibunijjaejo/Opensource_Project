@@ -14,22 +14,7 @@ from app.models.course import Course
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MATCH_THRESHOLD = 68.0
-
-# OCR 혼동 문자 정규화 테이블 (compute_similarity 내부 전용)
-# 0↔O, 5↔S(SW 오인식 대응)
-_CONFUSION_TABLE = str.maketrans({"0": "o", "5": "s"})
-
-# JAVA언어에서 "언어"가 잘못 인식되는 패턴들 ("io", "lO", "10", "H", "IO" 등)
-_JAVA_SUFFIX_PATTERN = re.compile(r"(java)(io|lo|l0|10|lO|IO|iO|h|언0|언o)", re.IGNORECASE)
-
-
-def _confusion_normalize(text: str) -> str:
-    """normalize_text 결과에 추가로 OCR 혼동 문자를 정규화합니다."""
-    text = text.translate(_CONFUSION_TABLE)
-    # JAVA 뒤 "언어" 오인식 패턴 보정
-    text = _JAVA_SUFFIX_PATTERN.sub(r"\1언어", text)
-    return text
+DEFAULT_MATCH_THRESHOLD = 72.0
 
 _WEEKDAY_WORDS = {"월", "화", "수", "목", "금", "토", "일"}
 _WEEKDAY_LONG_WORDS = {
@@ -127,18 +112,12 @@ def is_room_like(text: str) -> bool:
     if not norm:
         return False
 
-    # 기존 패턴: ab123, k302, 302, 302a
     if re.fullmatch(r"[a-z]{2,3}\d{2,4}", norm):
         return True
     if re.fullmatch(r"[a-z]\d{3,4}", norm):
         return True
     if re.fullmatch(r"\d{3,4}[a-z]?", norm):
         return True
-
-    # 확장 패턴: "공학관302", "정보관k201", "강의동a301" 형태
-    if re.fullmatch(r"[가-힣]{2,4}[a-z]?\d{3,4}[a-z]?", norm):
-        return True
-    # "온라인", "비대면" 같은 강의실 대체 표기는 제외 (오탐 방지)
 
     return False
 
@@ -194,9 +173,7 @@ def is_course_line_like(text: str) -> bool:
         return False
 
     if len(norm) < 2:
-        # 한 글자 한국어는 카드 내 줄바꿈 말미일 수 있으므로 허용
-        # ("론" ← 디지털회로개론, "안" ← 해킹및정보보안, "습" ← ...개발실습 등)
-        return re.fullmatch(r"[가-힣]", norm) is not None
+        return False
 
     return True
 
@@ -253,28 +230,11 @@ def should_merge_course_lines(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     if not same_column_like:
         return False
 
-    a_norm = normalize_text(a["display_text"])
-    b_norm = normalize_text(b["display_text"])
-
-    # 강의실 번호 블록(K302, A101 등) 병합 차단
-    if len(b_norm) <= 5 and re.fullmatch(r"[a-z]?\d{3,4}[a-z]?", b_norm):
-        return False
-
-    # 줄바꿈 말미 단독 한 글자 한국어 (론/안/습/론 등)
-    # 반드시 같은 카드 안(매우 좁은 수직 거리)이어야 병합 허용
-    if len(b_norm) == 1 and re.fullmatch(r"[가-힣]", b_norm):
-        if vertical_gap > height_ref * 1.5:
-            return False
-        return len(a_norm) >= 3
-
-    # 기본 수직 거리 제한 (카드 경계 넘기 방지)
     if vertical_gap > height_ref * 2.2:
         return False
 
-    # 양쪽 다 긴 텍스트(서로 다른 과목명일 가능성)는 더 강한 x 겹침 요구
-    if len(a_norm) >= 6 and len(b_norm) >= 4:
-        if x_overlap < 0.35:
-            return False
+    a_norm = normalize_text(a["display_text"])
+    b_norm = normalize_text(b["display_text"])
 
     short_tail = len(b_norm) <= 6
     likely_wrapped_title = len(a_norm) >= 4 and len(b_norm) >= 2
@@ -391,35 +351,11 @@ def deduplicate_course_names(course_names: List[str]) -> List[str]:
     return result
 
 
-# merged block의 정규화 길이가 이 값을 초과하면 과도한 병합으로 판단하여
-# merged 결과 대신 구성 raw 블록들을 개별 후보로 사용
-_MAX_MERGED_NORM_LEN = 18
-
-# OCR 노이즈 접두사 제거: ASCII 잡음 뒤 한국어 4글자 이상이 시작되면 한국어 부분만 추출
-_KOREAN_START_RE = re.compile(r"[가-힣]{4,}.*")
-
-
-def _clean_noise_prefix(text: str) -> Optional[str]:
-    """
-    "yecxf로캡스톤디자인" → "캡스톤디자인"
-    OCR 잡음 접두사가 붙은 텍스트에서 의미 있는 한국어 부분만 반환합니다.
-    접두사가 없거나 너무 짧은 한국어면 None 반환.
-    """
-    norm = normalize_text(text)
-    m = _KOREAN_START_RE.search(norm)
-    if m and m.start() >= 2:  # 앞에 2글자 이상 잡음이 있을 때만
-        return m.group(0)
-    return None
-
-
 def build_course_candidates(
     raw_blocks: List[Dict[str, Any]],
     merged_blocks: List[Dict[str, Any]],
 ) -> List[str]:
     candidates: List[str] = []
-
-    # raw 블록 id → 블록 매핑 (과도한 병합 시 fallback용)
-    raw_block_by_id: Dict[int, Dict[str, Any]] = {b["id"]: b for b in raw_blocks}
 
     merged_source_ids: Set[int] = set()
     for block in merged_blocks:
@@ -427,29 +363,14 @@ def build_course_candidates(
             merged_source_ids.add(sid)
 
     for block in merged_blocks:
-        norm = normalize_text(block["display_text"])
-
-        if len(norm) > _MAX_MERGED_NORM_LEN:
-            # 과도한 병합: 구성 raw 블록들을 개별 후보로 사용
-            for sid in block.get("source_ids", []):
-                raw_b = raw_block_by_id.get(sid)
-                if raw_b and is_probable_course_candidate(raw_b["display_text"]):
-                    candidates.append(raw_b["display_text"])
-        elif is_probable_course_candidate(block["display_text"]):
+        if is_probable_course_candidate(block["display_text"]):
             candidates.append(block["display_text"])
-            # 노이즈 접두사 버전도 추가 후보로 등록
-            cleaned = _clean_noise_prefix(block["display_text"])
-            if cleaned:
-                candidates.append(cleaned)
 
     for block in raw_blocks:
         if block["id"] in merged_source_ids:
             continue
         if is_probable_course_candidate(block["display_text"]):
             candidates.append(block["display_text"])
-            cleaned = _clean_noise_prefix(block["display_text"])
-            if cleaned:
-                candidates.append(cleaned)
 
     return deduplicate_course_names(candidates)
 
@@ -518,9 +439,15 @@ def extract_year_semester_from_blocks(
     return found_year, found_semester
 
 
-def _score_pair(na: str, nb: str) -> float:
-    """정규화된 두 문자열 쌍의 유사도 점수를 계산합니다."""
+def compute_similarity(a: str, b: str) -> float:
+    na = normalize_text(a)
+    nb = normalize_text(b)
+
+    if not na or not nb:
+        return 0.0
+
     len_a, len_b = len(na), len(nb)
+
     ratio_score = fuzz.ratio(na, nb)
     token_sort_score = fuzz.token_sort_ratio(na, nb)
     token_set_score = fuzz.token_set_ratio(na, nb)
@@ -532,31 +459,16 @@ def _score_pair(na: str, nb: str) -> float:
     if min_len >= 4 and (nb in na or na in nb) and max_len > min_len * 1.25:
         # 한쪽이 다른 쪽에 포함된 경우 (예: "캡스톤디자인(캡스톤디자인)" ↔ "캡스톤디자인",
         #                               OCR 부분 인식 "sw개발실습" ↔ "오픈소스를이용한sw개발실습")
-        return float(max(ratio_score, token_sort_score, partial_score))
+        # partial_ratio는 이 케이스에서 100에 가까우므로 패널티 없이 사용
+        score = max(ratio_score, token_sort_score, partial_score)
     else:
         len_ratio = min_len / max_len
         penalized_partial = partial_score * len_ratio
+        # token_set_ratio는 토큰 포함 여부 기반이라 길이 패널티 적용
         penalized_token_set = token_set_score * len_ratio
-        return float(max(ratio_score, token_sort_score, penalized_partial, penalized_token_set))
+        score = max(ratio_score, token_sort_score, penalized_partial, penalized_token_set)
 
-
-def compute_similarity(a: str, b: str) -> float:
-    na = normalize_text(a)
-    nb = normalize_text(b)
-
-    if not na or not nb:
-        return 0.0
-
-    score = _score_pair(na, nb)
-
-    # confusion-normalized 비교: 0↔O, 5↔S 같은 OCR 오인식 보정
-    # (양쪽 모두 같은 변환을 적용하므로 의미 손실 없음)
-    cna = _confusion_normalize(na)
-    cnb = _confusion_normalize(nb)
-    if cna != na or cnb != nb:
-        score = max(score, _score_pair(cna, cnb))
-
-    return score
+    return float(score)
 
 
 def _deduplicate_matched_courses(matched_courses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

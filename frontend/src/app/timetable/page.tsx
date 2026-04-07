@@ -4,11 +4,18 @@ import { useState, useRef, useEffect } from "react"
 import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Upload, CheckCircle, GraduationCap, FileImage, BookOpen } from "lucide-react"
+import { ArrowLeft, Upload, CheckCircle, GraduationCap, FileImage, BookOpen, X, Pencil, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const START_YEAR = 2020
 const SEMESTERS = [1, 2] as const
+
+type PendingSlot = {
+  file: File
+  previewUrl: string
+  year: number
+  semester: number
+}
 
 export default function TimetablePage() {
   const router = useRouter()
@@ -16,9 +23,8 @@ export default function TimetablePage() {
   const years = Array.from({ length: currentYear - START_YEAR + 1 }, (_, i) => START_YEAR + i)
 
   const [selectedYear, setSelectedYear] = useState(currentYear)
-  const [uploadCount, setUploadCount] = useState(0)
-  const [uploading, setUploading] = useState<Record<string, boolean>>({})
-  const [uploaded, setUploaded] = useState<Record<string, string>>({})
+  const [pendingSlots, setPendingSlots] = useState<Record<string, PendingSlot>>({})
+  const [submitting, setSubmitting] = useState(false)
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   useEffect(() => {
@@ -26,40 +32,82 @@ export default function TimetablePage() {
     if (!token) router.replace("/login")
   }, [router])
 
+  // 언마운트 시 object URL 정리
+  const pendingSlotsRef = useRef(pendingSlots)
+  pendingSlotsRef.current = pendingSlots
+  useEffect(() => {
+    return () => {
+      Object.values(pendingSlotsRef.current as Record<string, PendingSlot>).forEach(s =>
+        URL.revokeObjectURL(s.previewUrl)
+      )
+    }
+  }, [])
+
   const slotKey = (year: number, semester: number) => `${year}-${semester}`
 
-  const handleFileSelect = async (year: number, semester: number, file: File) => {
-    const key = slotKey(year, semester)
+  const handleFileSelect = (year: number, semester: number, file: File) => {
     const ext = file.name.split(".").pop()?.toLowerCase()
     if (!["jpg", "jpeg", "png"].includes(ext ?? "")) return
 
-    setUploading(prev => ({ ...prev, [key]: true }))
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("year", String(year))
-      formData.append("semester", String(semester))
+    const key = slotKey(year, semester)
+    const existing = pendingSlots[key]
+    if (existing) URL.revokeObjectURL(existing.previewUrl)
 
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-      const token = localStorage.getItem("access_token")
-      const res = await fetch(`${BASE_URL}/upload/course-image`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      })
+    const previewUrl = URL.createObjectURL(file)
+    setPendingSlots((prev: Record<string, PendingSlot>) => ({
+      ...prev,
+      [key]: { file, previewUrl, year, semester },
+    }))
+  }
 
-      if (res.status === 202 || res.ok) {
-        setUploaded(prev => ({ ...prev, [key]: file.name }))
-        setUploadCount(prev => prev + 1)
-        localStorage.setItem("ocrPending", JSON.stringify({ ts: Date.now() }))
+  const removeSlot = (year: number, semester: number) => {
+    const key = slotKey(year, semester)
+    const existing = pendingSlots[key]
+    if (existing) URL.revokeObjectURL(existing.previewUrl)
+    setPendingSlots((prev: Record<string, PendingSlot>) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+    const ref = inputRefs.current[key]
+    if (ref) ref.value = ""
+  }
+
+  const pendingCount = Object.keys(pendingSlots).length
+
+  const handleSubmit = async () => {
+    if (pendingCount === 0 || submitting) return
+    setSubmitting(true)
+
+    const entries = Object.values(pendingSlots) as PendingSlot[]
+    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+    const token = localStorage.getItem("access_token")
+    let anySuccess = false
+
+    for (const slot of entries) {
+      try {
+        const formData = new FormData()
+        formData.append("file", slot.file)
+        formData.append("year", String(slot.year))
+        formData.append("semester", String(slot.semester))
+
+        const res = await fetch(`${BASE_URL}/upload/course-image`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        })
+        if (res.status === 202 || res.ok) anySuccess = true
+      } catch (e) {
+        console.error("Upload error:", e)
       }
-    } catch (e) {
-      console.error("Upload error:", e)
-    } finally {
-      setUploading(prev => ({ ...prev, [key]: false }))
-      const ref = inputRefs.current[key]
-      if (ref) ref.value = ""
     }
+
+    if (anySuccess) {
+      localStorage.setItem("ocrPending", JSON.stringify({ ts: Date.now() }))
+    }
+
+    setSubmitting(false)
+    router.push("/graduation")
   }
 
   return (
@@ -85,34 +133,42 @@ export default function TimetablePage() {
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
             <h1 className="text-lg font-semibold text-foreground">시간표 업로드</h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-              학년도를 선택하고 해당 학기의 시간표 이미지를 업로드하세요.
+              이수한 학기의 시간표를 모두 선택한 후 최종 제출하세요.
             </p>
           </div>
 
           {/* Year scroll bar */}
           <div className="flex overflow-x-auto gap-2 pb-1" style={{ scrollbarWidth: "thin" }}>
-            {years.map(year => (
-              <button
-                key={year}
-                onClick={() => setSelectedYear(year)}
-                className={`flex-shrink-0 px-8 py-2.5 rounded text-sm font-semibold transition-colors ${
-                  selectedYear === year
-                    ? "text-white"
-                    : "bg-muted text-muted-foreground hover:bg-muted/70"
-                }`}
-                style={selectedYear === year ? { backgroundColor: "#B0232A" } : {}}
-              >
-                {year}
-              </button>
-            ))}
+            {years.map(year => {
+              const hasSlot = SEMESTERS.some(s => !!pendingSlots[slotKey(year, s)])
+              return (
+                <button
+                  key={year}
+                  onClick={() => setSelectedYear(year)}
+                  className={`relative flex-shrink-0 px-8 py-2.5 rounded text-sm font-semibold transition-colors ${
+                    selectedYear === year
+                      ? "text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  }`}
+                  style={selectedYear === year ? { backgroundColor: "#B0232A" } : {}}
+                >
+                  {year}
+                  {hasSlot && (
+                    <span
+                      className="absolute top-1 right-1 h-2 w-2 rounded-full bg-green-500"
+                      title="이미지 선택됨"
+                    />
+                  )}
+                </button>
+              )
+            })}
           </div>
 
           {/* Semester upload slots */}
           <div className="grid grid-cols-2 gap-6">
             {SEMESTERS.map(semester => {
               const key = slotKey(selectedYear, semester)
-              const isUploading = uploading[key] ?? false
-              const isUploaded = !!uploaded[key]
+              const slot = pendingSlots[key]
 
               return (
                 <div key={key} className="flex flex-col gap-2">
@@ -126,49 +182,67 @@ export default function TimetablePage() {
                   </div>
 
                   <div
-                    className={`relative flex flex-col items-center justify-center rounded-lg border-2 transition-colors ${
-                      isUploaded
-                        ? "border-green-400 bg-green-50/20"
-                        : isUploading
+                    className={`relative overflow-hidden rounded-lg border-2 transition-colors ${
+                      slot
+                        ? "border-green-400"
+                        : submitting
                         ? "border-border bg-muted/30 opacity-60 cursor-not-allowed"
                         : "border-border bg-muted/40 hover:border-[#B0232A] hover:bg-muted/60 cursor-pointer"
                     }`}
-                    style={{ aspectRatio: "4/3" }}
-                    onClick={() => !isUploading && !isUploaded && inputRefs.current[key]?.click()}
+                    style={{ minHeight: "240px" }}
+                    onClick={() => !slot && !submitting && inputRefs.current[key]?.click()}
                   >
-                    {isUploading ? (
-                      <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground border-t-foreground" />
-                    ) : isUploaded ? (
-                      <div className="flex flex-col items-center gap-2 px-4 text-center">
-                        <CheckCircle className="h-8 w-8 text-green-500" />
-                        <span className="text-xs text-muted-foreground line-clamp-2">{uploaded[key]}</span>
-                        <span className="text-xs font-medium text-green-600">업로드 완료</span>
-                        <button
-                          className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-                          onClick={e => {
-                            e.stopPropagation()
-                            setUploaded(prev => { const n = { ...prev }; delete n[key]; return n })
-                          }}
-                        >
-                          다시 업로드
-                        </button>
-                      </div>
+                    {slot ? (
+                      <>
+                        {/* 이미지 미리보기 */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={slot.previewUrl}
+                          alt={`${selectedYear}년 ${semester}학기 시간표`}
+                          className="w-full h-full object-contain bg-muted/20"
+                          style={{ display: "block", maxHeight: "360px" }}
+                        />
+                        {/* 오버레이 버튼 */}
+                        <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors flex items-center justify-center gap-3 group">
+                          <button
+                            className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 bg-white/90 hover:bg-white text-foreground text-xs font-medium px-3 py-1.5 rounded-full shadow"
+                            onClick={e => { e.stopPropagation(); inputRefs.current[key]?.click() }}
+                          >
+                            <Pencil className="h-3 w-3" />
+                            수정
+                          </button>
+                          <button
+                            className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 bg-white/90 hover:bg-white text-red-500 text-xs font-medium px-3 py-1.5 rounded-full shadow"
+                            onClick={e => { e.stopPropagation(); removeSlot(selectedYear, semester) }}
+                          >
+                            <X className="h-3 w-3" />
+                            삭제
+                          </button>
+                        </div>
+                        {/* 완료 배지 */}
+                        <div className="absolute top-2 right-2 flex items-center gap-1 bg-green-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+                          <CheckCircle className="h-3 w-3" />
+                          선택됨
+                        </div>
+                      </>
                     ) : (
-                      <div className="flex flex-col items-center gap-2 text-center px-4">
+                      <div className="flex h-full flex-col items-center justify-center gap-2 text-center px-4">
                         <Upload className="h-6 w-6 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">이미지 업로드</span>
+                        <span className="text-sm text-muted-foreground">이미지 선택</span>
+                        <span className="text-xs text-muted-foreground/60">JPG, PNG</span>
                       </div>
                     )}
 
                     <input
                       ref={el => { inputRefs.current[key] = el }}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png"
                       className="hidden"
-                      disabled={isUploading}
+                      disabled={submitting}
                       onChange={e => {
                         const file = e.target.files?.[0]
                         if (file) handleFileSelect(selectedYear, semester, file)
+                        e.target.value = ""
                       }}
                     />
                   </div>
@@ -177,30 +251,54 @@ export default function TimetablePage() {
             })}
           </div>
 
-          {/* Upload count notification */}
-          {uploadCount > 0 && (
-            <div className="rounded-lg border border-border bg-card p-5 flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-                <p className="text-sm font-medium text-foreground">
-                  총 <span className="font-bold">{uploadCount}개</span>의 시간표가 업로드 되었습니다.
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground -mt-2">
-                백그라운드에서 과목을 인식 중입니다. 이수 현황 페이지에서 결과를 확인하세요.
+          {/* 전체 선택 현황 요약 */}
+          {pendingCount > 0 && (
+            <div className="rounded-lg border border-border bg-card p-4">
+              <p className="text-sm font-medium text-foreground mb-2">
+                선택된 시간표 <span className="font-bold">{pendingCount}개</span>
               </p>
-              <Button
-                asChild
-                className="w-full h-10"
-                style={{ backgroundColor: "#B0232A" }}
-              >
-                <Link href="/graduation" className="flex items-center justify-center gap-2">
-                  <GraduationCap className="h-4 w-4" />
-                  이수 현황 보러가기
-                </Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {Object.values(pendingSlots)
+                  .sort((a, b) => a.year !== b.year ? a.year - b.year : a.semester - b.semester)
+                  .map(slot => (
+                    <span
+                      key={slotKey(slot.year, slot.semester)}
+                      className="inline-flex items-center gap-1 text-xs bg-muted px-2.5 py-1 rounded-full text-muted-foreground"
+                    >
+                      {slot.year}년 {slot.semester}학기
+                      <button
+                        onClick={() => removeSlot(slot.year, slot.semester)}
+                        className="ml-0.5 hover:text-foreground transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+              </div>
             </div>
           )}
+
+          {/* 최종 제출 버튼 */}
+          <Button
+            onClick={handleSubmit}
+            disabled={pendingCount === 0 || submitting}
+            className="w-full h-12 text-sm font-semibold"
+            style={{ backgroundColor: pendingCount > 0 && !submitting ? "#B0232A" : undefined }}
+          >
+            {submitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                업로드 중... ({pendingCount}개)
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <GraduationCap className="h-4 w-4" />
+                {pendingCount > 0
+                  ? `${pendingCount}개 시간표 최종 제출`
+                  : "시간표를 선택해주세요"}
+              </span>
+            )}
+          </Button>
 
           {/* Instructions */}
           <div className="rounded-lg border border-border bg-card p-5">
@@ -208,15 +306,15 @@ export default function TimetablePage() {
             <ul className="flex flex-col gap-2 text-xs text-muted-foreground">
               <li className="flex items-start gap-2">
                 <FileImage className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#B0232A" }} />
-                <span>학교 포털에서 해당 학기 시간표 전체 화면을 캡처해주세요.</span>
+                <span>에브리타임에서 해당 학기 시간표 전체 화면을 캡처해주세요.</span>
               </li>
               <li className="flex items-start gap-2">
                 <BookOpen className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#B0232A" }} />
-                <span>과목 코드와 과목명이 명확히 보여야 정확한 인식이 가능합니다.</span>
+                <span>과목명과 시간표 전체가 잘리지 않고 명확히 보여야 정확한 인식이 가능합니다.</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#B0232A" }} />
-                <span>인식 결과는 졸업요건 확인 및 수강 계획에 활용됩니다.</span>
+                <span>이수한 모든 학기를 해당 년도/학기에 업로드 후 <strong>최종 제출</strong>을 누르면 시간표 인식이 시작됩니다.</span>
               </li>
             </ul>
           </div>
