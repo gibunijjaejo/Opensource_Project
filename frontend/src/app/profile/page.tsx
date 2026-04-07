@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { ArrowLeft, User, Save, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { careerOptions, interestOptions } from "@/lib/constants/course-data"
+import { interestOptions } from "@/lib/constants/course-data"
 import { usersApi } from "@/lib/api"
 
 export default function ProfilePage() {
@@ -17,12 +16,13 @@ export default function ProfilePage() {
     major: "컴퓨터공학과",
     semester: 1,
     interests: [] as string[],
-    targetCareers: [] as string[],
   })
   const [semesterInput, setSemesterInput] = useState("")
   const [semesterError, setSemesterError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const isLoaded = useRef(false)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const token = localStorage.getItem("access_token")
@@ -30,11 +30,22 @@ export default function ProfilePage() {
     usersApi.me()
       .then((u) => {
         const sem = u.current_semester || 1
-        setProfile((prev) => ({ ...prev, name: u.name, studentId: String(u.student_id), semester: sem }))
+        const interests = u.interests ? u.interests.split(",").filter(Boolean) : []
+        setProfile((prev) => ({ ...prev, name: u.name, studentId: String(u.student_id), semester: sem, interests }))
         setSemesterInput(`${sem}학기`)
+        isLoaded.current = true
       })
       .catch(() => {})
   }, [])
+
+  // 관심 분야 변경 시 자동 저장
+  useEffect(() => {
+    if (!isLoaded.current) return
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(() => {
+      usersApi.update({ interests: profile.interests }).catch(() => {})
+    }, 500)
+  }, [profile.interests])
 
   const handleSemesterChange = (value: string) => {
     setSemesterInput(value)
@@ -57,31 +68,22 @@ export default function ProfilePage() {
         ? prev.interests.filter((i) => i !== interest)
         : [...prev.interests, interest],
     }))
-    setSaved(false)
-  }
-
-  const toggleCareer = (career: string) => {
-    setProfile((prev) => ({
-      ...prev,
-      targetCareers: prev.targetCareers.includes(career)
-        ? prev.targetCareers.filter((c) => c !== career)
-        : prev.targetCareers.length < 3
-        ? [...prev.targetCareers, career]
-        : prev.targetCareers,
-    }))
-    setSaved(false)
   }
 
   const handleSave = async () => {
+    if (semesterError) return
     setIsSaving(true)
-    await new Promise((resolve) => setTimeout(resolve, 600))
-    setIsSaving(false)
-    setSaved(true)
+    try {
+      await usersApi.update({ current_semester: profile.semester, interests: profile.interests })
+      setSaved(true)
+    } catch {
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
           <div className="flex h-14 items-center justify-between">
@@ -123,15 +125,14 @@ export default function ProfilePage() {
 
       <main className="mx-auto max-w-3xl px-4 sm:px-6 py-8">
         <div className="flex flex-col gap-8">
-          {/* Title */}
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
             <h1 className="text-lg font-semibold text-foreground">프로필 및 관심 분야</h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-              관심 분야와 목표 직무를 설정하면 맞춤형 과목 추천을 받을 수 있습니다.
+              관심 분야를 설정하면 해당 분야의 커뮤니티 게시판으로 이동할 수 있습니다.
             </p>
           </div>
 
-          {/* Basic Info */}
+          {/* 기본 정보 */}
           <section className="rounded-lg border border-border bg-card p-6">
             <div className="flex items-center gap-3 mb-5">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
@@ -172,12 +173,12 @@ export default function ProfilePage() {
             </div>
           </section>
 
-          {/* Interests */}
+          {/* 관심 분야 */}
           <section className="rounded-lg border border-border bg-card p-6">
             <div className="mb-5">
               <h2 className="text-sm font-semibold text-foreground">관심 분야</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                관심 있는 분야를 선택하세요 (복수 선택 가능)
+                졸업 후 희망하는 분야를 선택하세요 (복수 선택 가능)
               </p>
             </div>
 
@@ -190,11 +191,7 @@ export default function ProfilePage() {
                     onClick={() => toggleInterest(interest)}
                     className={`
                       flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors
-                      ${
-                        isSelected
-                          ? "border-transparent text-white"
-                          : "border-border bg-background text-foreground hover:bg-muted"
-                      }
+                      ${isSelected ? "border-transparent text-white" : "border-border bg-background text-foreground hover:bg-muted"}
                     `}
                     style={isSelected ? { backgroundColor: "#B0232A" } : {}}
                   >
@@ -214,84 +211,28 @@ export default function ProfilePage() {
             )}
           </section>
 
-          {/* Target Careers */}
-          <section className="rounded-lg border border-border bg-card p-6">
-            <div className="mb-5">
-              <h2 className="text-sm font-semibold text-foreground">목표 직무</h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                희망하는 직무를 최대 3개까지 선택하세요
-              </p>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {careerOptions.map((career) => {
-                const isSelected = profile.targetCareers.includes(career)
-                const isDisabled = !isSelected && profile.targetCareers.length >= 3
-                return (
-                  <button
-                    key={career}
-                    onClick={() => toggleCareer(career)}
-                    disabled={isDisabled}
-                    className={`
-                      flex items-center justify-between rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors text-left
-                      ${
-                        isSelected
-                          ? "border-transparent text-white"
-                          : isDisabled
-                          ? "border-border bg-muted/30 text-muted-foreground cursor-not-allowed"
-                          : "border-border bg-background text-foreground hover:bg-muted"
-                      }
-                    `}
-                    style={isSelected ? { backgroundColor: "#B0232A" } : {}}
-                  >
-                    <span>{career}</span>
-                    {isSelected && <Check className="h-3.5 w-3.5 flex-shrink-0" />}
-                  </button>
-                )
-              })}
-            </div>
-
-            {profile.targetCareers.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-2">선택된 목표 직무:</p>
-                <div className="flex flex-wrap gap-2">
-                  {profile.targetCareers.map((career) => (
-                    <Badge
-                      key={career}
-                      variant="secondary"
-                      className="text-xs"
-                      style={{ backgroundColor: "#B0232A20", color: "#B0232A" }}
-                    >
-                      {career}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Preview */}
-          {profile.targetCareers.length > 0 && (
+          {/* 커뮤니티 바로가기 */}
+          {profile.interests.length > 0 && (
             <section className="rounded-lg border border-border bg-muted/30 p-6">
-              <h2 className="text-sm font-semibold text-foreground mb-3">과목 매칭 미리보기</h2>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                설정을 저장하면 대시보드와 과목 상세 페이지에서{" "}
-                <span className="font-medium text-foreground">
-                  {profile.targetCareers.join(", ")}
-                </span>{" "}
-                직무와의 관련도를 확인할 수 있습니다.
-              </p>
-              <div className="mt-4 flex gap-3">
-                <Button asChild variant="outline" size="sm" className="h-8">
-                  <Link href="/">대시보드에서 확인</Link>
-                </Button>
+              <h2 className="text-sm font-semibold text-foreground mb-1">내 커뮤니티 게시판</h2>
+              <p className="text-xs text-muted-foreground mb-4">선택한 분야의 게시판으로 바로 이동할 수 있습니다.</p>
+              <div className="flex flex-wrap gap-2">
+                {profile.interests.map((item) => (
+                  <Link
+                    key={item}
+                    href={`/community/${encodeURIComponent(item)}`}
+                    className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+                    style={{ borderColor: "#B0232A", color: "#B0232A" }}
+                  >
+                    {item} →
+                  </Link>
+                ))}
               </div>
             </section>
           )}
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="mt-12 border-t border-border">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-4">
           <p className="text-xs text-muted-foreground/60 text-center">

@@ -3,6 +3,8 @@ export interface User {
   name: string
   email: string
   current_semester: number | null
+  interests: string
+  target_careers: string
   major_credits: number
   common_credits: number
   total_credits: number
@@ -87,4 +89,32 @@ export interface HistoryItem {
   semester: number | null
   is_retake: boolean
   course: Course | null
+}
+
+export interface Post {
+  id: number
+  category: string
+  title: string
+  content: string
+  student_id: number
+  author_name: string | null
+  is_anonymous: boolean
+  created_at: string
+  comment_count: number
+  likes: number
+  file_path: string | null
+  file_name: string | null
+}
+
+export interface Comment {
+  id: number
+  post_id: number
+  content: string
+  student_id: number
+  author_name: string | null
+  created_at: string
+}
+
+export interface PostDetail extends Post {
+  comments: Comment[]
 }

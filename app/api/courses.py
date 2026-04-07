@@ -17,6 +17,8 @@ def get_courses(
     semester: Optional[int] = Query(None),
     category: Optional[str] = Query(None, description="course_category 필터"),
     is_english: Optional[bool] = Query(None),
+    limit: Optional[int] = Query(None),
+    offset: int = Query(0),
 ):
     query = db.query(Course).options(joinedload(Course.professor))
     if q:
@@ -33,6 +35,9 @@ def get_courses(
         query = query.filter(Course.course_category == category)
     if is_english is not None:
         query = query.filter(Course.is_english == is_english)
+    query = query.offset(offset)
+    if limit:
+        query = query.limit(limit)
     return query.all()
 
 
