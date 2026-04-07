@@ -39,7 +39,7 @@ export default function DashboardPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [userName, setUserName] = useState<string>("")
   const [histories, setHistories] = useState<HistoryItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingAll, setIsLoadingAll] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem("access_token")
@@ -48,10 +48,17 @@ export default function DashboardPage() {
       return
     }
 
+    // 첫 페이지(10개) 즉시 표시
+    coursesApi.list({ year: 2026, semester: 1, limit: 10 })
+      .then((data) => setCourses(data.map(mapApiCourse)))
+      .catch(() => {})
+
+    // 전체 목록 백그라운드 로딩
+    setIsLoadingAll(true)
     coursesApi.list({ year: 2026, semester: 1 })
       .then((data) => setCourses(data.map(mapApiCourse)))
       .catch(() => {})
-      .finally(() => setIsLoading(false))
+      .finally(() => setIsLoadingAll(false))
 
     usersApi.me()
       .then((u) => setUserName(u.name))
@@ -238,15 +245,12 @@ export default function DashboardPage() {
           <div className="border-t border-border" />
 
           {/* Browse Section */}
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground text-center py-8">강의 목록 로딩 중...</p>
-          ) : (
-            <BrowseCourses
-              courses={courses}
-              wishlistIds={wishlistIds}
-              onAdd={addToWishlist}
-            />
-          )}
+          <BrowseCourses
+            courses={courses}
+            wishlistIds={wishlistIds}
+            onAdd={addToWishlist}
+            isLoadingAll={isLoadingAll}
+          />
         </div>
       </main>
 

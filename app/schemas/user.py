@@ -31,12 +31,20 @@ class UserResponse(BaseModel):
     name: str
     email: str
     current_semester: Optional[int] = None
+    interests: Optional[str] = ""
+    target_careers: Optional[str] = ""
     major_credits: int
     common_credits: int
     total_credits: int
     total_english: int
 
     model_config = {"from_attributes": True}
+
+
+class UserUpdate(BaseModel):
+    current_semester: Optional[int] = None
+    interests: Optional[list[str]] = None
+    target_careers: Optional[list[str]] = None
 
 
 class Token(BaseModel):
