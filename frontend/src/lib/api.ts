@@ -1,4 +1,4 @@
-import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary } from "@/types"
+import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary, Post, PostDetail, Comment } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
@@ -82,12 +82,14 @@ export const authApi = {
 
 // ── Courses ───────────────────────────────────────────
 export const coursesApi = {
-  list: (params?: { q?: string; category?: string; year?: number; semester?: number }) => {
+  list: (params?: { q?: string; category?: string; year?: number; semester?: number; limit?: number; offset?: number }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set("q", params.q)
     if (params?.category) qs.set("category", params.category)
     if (params?.year) qs.set("year", String(params.year))
     if (params?.semester) qs.set("semester", String(params.semester))
+    if (params?.limit) qs.set("limit", String(params.limit))
+    if (params?.offset) qs.set("offset", String(params.offset))
     const query = qs.toString() ? `?${qs}` : ""
     return request<Course[]>(`/api/v1/courses${query}`)
   },
@@ -117,7 +119,7 @@ export const cartApi = {
 export const usersApi = {
   me: () => request<User>("/api/v1/users/me"),
 
-  update: (data: { current_semester?: number }) =>
+  update: (data: { current_semester?: number; interests?: string[] }) =>
     request<User>("/api/v1/users/me", {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -157,4 +159,40 @@ export const syllabusApi = {
 
   get: (courseId: number) =>
     request<SyllabusSummary>(`/api/v1/syllabus/${courseId}`),
+}
+
+// ── Community ─────────────────────────────────────────
+export const communityApi = {
+  getPosts: (category: string) =>
+    request<Post[]>(`/api/v1/community/${encodeURIComponent(category)}`),
+
+  createPost: (category: string, title: string, content: string, isAnonymous: boolean, file?: File | null) => {
+    const formData = new FormData()
+    formData.append("title", title)
+    formData.append("content", content)
+    formData.append("is_anonymous", String(isAnonymous))
+    if (file) formData.append("file", file)
+    return request<Post>(`/api/v1/community/${encodeURIComponent(category)}`, {
+      method: "POST",
+      body: formData,
+    }, true)
+  },
+
+  getPost: (category: string, postId: number) =>
+    request<PostDetail>(`/api/v1/community/${encodeURIComponent(category)}/${postId}`),
+
+  deletePost: (category: string, postId: number) =>
+    request<void>(`/api/v1/community/${encodeURIComponent(category)}/${postId}`, { method: "DELETE" }),
+
+  createComment: (category: string, postId: number, content: string) =>
+    request<Comment>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+
+  deleteComment: (category: string, postId: number, commentId: number) =>
+    request<void>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/comments/${commentId}`, { method: "DELETE" }),
+
+  toggleLike: (category: string, postId: number) =>
+    request<{ liked: boolean; likes: number }>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/like`, { method: "POST" }),
 }

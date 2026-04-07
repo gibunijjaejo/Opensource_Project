@@ -11,9 +11,10 @@ interface BrowseCoursesProps {
   courses: Course[]
   wishlistIds: Set<string>
   onAdd: (id: string) => void
+  isLoadingAll?: boolean
 }
 
-export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProps) {
+export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = false }: BrowseCoursesProps) {
   const [query, setQuery] = useState("")
   const [confirmedQuery, setConfirmedQuery] = useState("")
   const [page, setPage] = useState(1)
@@ -46,6 +47,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProp
           <h2 className="text-base font-semibold text-foreground">26학년도 1학기 과목검색</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {filtered.length}개 / {courses.length}개 과목
+            {isLoadingAll && <span className="ml-1.5 text-muted-foreground/50">전체 로딩 중...</span>}
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">

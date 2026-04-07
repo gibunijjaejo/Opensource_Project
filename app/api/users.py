@@ -30,6 +30,10 @@ def update_me(
         raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
     if req.current_semester is not None:
         user.current_semester = req.current_semester
+    if req.interests is not None:
+        user.interests = ",".join(req.interests)
+    if req.target_careers is not None:
+        user.target_careers = ",".join(req.target_careers)
     db.commit()
     db.refresh(user)
     return user

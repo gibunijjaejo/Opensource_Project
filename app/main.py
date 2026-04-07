@@ -1,14 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.api import auth, upload, courses, cart, history, users, admin, syllabus
+from fastapi.staticfiles import StaticFiles
+from app.api import auth, upload, courses, cart, history, users, admin, syllabus, posts
 from app.database import engine, Base
-from app.models import user, course, professor, activity  # noqa: F401 — Base 테이블 등록용
+from app.models import user, course, professor, activity, post  # noqa: F401 — Base 테이블 등록용
 
 # 서버 실행 시 DB 테이블 생성
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="서간표 통합 서버")
+
+import os
+os.makedirs("static/uploads/posts", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +32,7 @@ app.include_router(history.router)
 app.include_router(users.router)
 app.include_router(admin.router)
 app.include_router(syllabus.router)
+app.include_router(posts.router)
 
 @app.get("/")
 async def root():

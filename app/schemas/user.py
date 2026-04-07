@@ -31,6 +31,8 @@ class UserResponse(BaseModel):
     name: str
     email: str
     current_semester: Optional[int] = None
+    interests: Optional[str] = ""
+    target_careers: Optional[str] = ""
     major_credits: int
     common_credits: int
     total_credits: int
@@ -41,6 +43,8 @@ class UserResponse(BaseModel):
 
 class UserUpdate(BaseModel):
     current_semester: Optional[int] = None
+    interests: Optional[list[str]] = None
+    target_careers: Optional[list[str]] = None
 
 
 class Token(BaseModel):
