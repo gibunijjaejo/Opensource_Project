@@ -16,6 +16,8 @@ interface BrowseCoursesProps {
 export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProps) {
   const [query, setQuery] = useState("")
   const [confirmedQuery, setConfirmedQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
   const tableRef = useRef<HTMLDivElement>(null)
 
   const filtered = courses.filter((c) => {
@@ -28,8 +30,12 @@ export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProp
     )
   })
 
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
   const handleSearch = () => {
     setConfirmedQuery(query)
+    setPage(1)
     tableRef.current?.scrollTo({ top: 0 })
   }
 
@@ -86,14 +92,14 @@ export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProp
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {paginated.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   검색 결과가 없습니다.
                 </td>
               </tr>
             ) : (
-              filtered.map((course, i) => {
+              paginated.map((course, i) => {
                 const inWishlist = wishlistIds.has(course.id)
                 return (
                   <tr
@@ -154,6 +160,41 @@ export function BrowseCourses({ courses, wishlistIds, onAdd }: BrowseCoursesProp
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-3 flex items-center justify-center gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+          >
+            이전
+          </Button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            <Button
+              key={p}
+              size="sm"
+              variant={p === page ? "default" : "outline"}
+              className="h-7 w-7 p-0 text-xs"
+              style={p === page ? { backgroundColor: "#B0232A" } : {}}
+              onClick={() => setPage(p)}
+            >
+              {p}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 text-xs"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+          >
+            다음
+          </Button>
+        </div>
+      )}
     </section>
   )
 }

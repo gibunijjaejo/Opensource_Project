@@ -116,6 +116,12 @@ export const cartApi = {
 // ── Users ─────────────────────────────────────────────
 export const usersApi = {
   me: () => request<User>("/api/v1/users/me"),
+
+  update: (data: { current_semester?: number }) =>
+    request<User>("/api/v1/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 }
 
 // ── History ───────────────────────────────────────────

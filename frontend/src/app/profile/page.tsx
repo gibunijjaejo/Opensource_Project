@@ -73,10 +73,16 @@ export default function ProfilePage() {
   }
 
   const handleSave = async () => {
+    if (semesterError) return
     setIsSaving(true)
-    await new Promise((resolve) => setTimeout(resolve, 600))
-    setIsSaving(false)
-    setSaved(true)
+    try {
+      await usersApi.update({ current_semester: profile.semester })
+      setSaved(true)
+    } catch {
+      // 저장 실패 시 무시
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (

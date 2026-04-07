@@ -39,6 +39,10 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserUpdate(BaseModel):
+    current_semester: Optional[int] = None
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
