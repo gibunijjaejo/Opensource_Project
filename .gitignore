@@ -78,6 +78,7 @@ venv/
 ENV/
 .env
 auth_key.json  # 보안 파일 예시
+test_seoganpyo.db
 
 ### Node / Next.js ###
 node_modules/

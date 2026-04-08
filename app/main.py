@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,7 +13,6 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="서간표 통합 서버")
 
-import os
 os.makedirs("static/uploads/posts", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
