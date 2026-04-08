@@ -109,26 +109,14 @@ pipeline {
             sh '''
                 curl -s -X POST "$DISCORD_WEBHOOK" \
                   -H "Content-Type: application/json" \
-                  -d "{
-                    \\"embeds\\": [{
-                      \\"title\\": \\"✅ 배포 성공\\",
-                      \\"description\\": \\"**브랜치:** ${GIT_BRANCH}\\\\n**커밋:** ${GIT_COMMIT?.take(8)}\\\\n**빌드:** #${BUILD_NUMBER}\\",
-                      \\"color\\": 3066993
-                    }]
-                  }"
+                  -d "{\\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\"}"
             '''
         }
         failure {
             sh '''
                 curl -s -X POST "$DISCORD_WEBHOOK" \
                   -H "Content-Type: application/json" \
-                  -d "{
-                    \\"embeds\\": [{
-                      \\"title\\": \\"❌ 빌드 실패\\",
-                      \\"description\\": \\"**브랜치:** ${GIT_BRANCH}\\\\n**커밋:** ${GIT_COMMIT?.take(8)}\\\\n**빌드:** #${BUILD_NUMBER}\\\\n**로그:** ${BUILD_URL}console\\",
-                      \\"color\\": 15158332
-                    }]
-                  }"
+                  -d "{\\"content\\": \\"❌ **빌드 실패** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH} | Jenkins에서 로그 확인\\"}"
             '''
         }
     }
