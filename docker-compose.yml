@@ -24,7 +24,7 @@ services:
         container_name: seoganpyo-api
         restart: always
         ports:
-            - "8080:8000"
+            - "8088:8000"
         volumes:
             - .:/app
         env_file:
@@ -53,7 +53,7 @@ services:
         build:
             context: ./frontend
             args:
-                - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+                - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8088}
         container_name: seoganpyo-frontend
         restart: always
         ports:

@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        BACKEND_URL  = 'http://localhost:8080'
+        BACKEND_URL  = 'http://localhost:8088'
         FRONTEND_URL = 'http://localhost:3000'
     }
 
@@ -87,7 +87,10 @@ pipeline {
         // ── 5. Docker 빌드 & 배포 ─────────────────────────────────────
         stage('Deploy') {
             steps {
-                sh 'docker compose up --build -d'
+                sh '''
+                    docker compose down --remove-orphans || true
+                    docker compose up --build -d
+                '''
             }
         }
 
