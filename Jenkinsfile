@@ -109,14 +109,14 @@ pipeline {
             sh '''
                 curl -s -X POST "$DISCORD_WEBHOOK" \
                   -H "Content-Type: application/json" \
-                  -d "{\\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\"}"
+                  -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\"}"
             '''
         }
         failure {
             sh '''
                 curl -s -X POST "$DISCORD_WEBHOOK" \
                   -H "Content-Type: application/json" \
-                  -d "{\\"content\\": \\"❌ **빌드 실패** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH} | Jenkins에서 로그 확인\\"}"
+                  -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"❌ **빌드 실패** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH} | Jenkins에서 로그 확인\\"}"
             '''
         }
     }
