@@ -174,8 +174,8 @@ export default function TimetablePage() {
                 <div key={key} className="flex flex-col gap-2">
                   <div className="flex justify-center">
                     <span
-                      className="px-6 py-1.5 rounded text-sm font-medium text-foreground"
-                      style={{ backgroundColor: "#fecaca" }}
+                      className="px-6 py-1.5 rounded text-sm font-medium text-white"
+                      style={{ backgroundColor: "#B0232A" }}
                     >
                       {semester}학기
                     </span>

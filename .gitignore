@@ -110,6 +110,12 @@ data/syllabi/*.pdf
 ### OCR 평가 데이터셋 ###
 dataset/images/
 eval_result*.txt
+timetable_labels.json
+eval_ocr.py
+
+### 백업 파일 ###
+app/services/image_service_paddle_legacy.py
+app/api/upload_paddle_legacy.py
 
 ### Claude Code ###
 .claude/

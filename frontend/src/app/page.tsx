@@ -72,11 +72,11 @@ export default function DashboardPage() {
   }, [router])
 
   const wishlistIds = new Set(
-    cartItems.map((item) => String(item.course_id))
+    cartItems.filter((item) => item.course_id != null).map((item) => String(item.course_id))
   )
   // cartId 역조회용 맵 (course_id → cartItemId)
   const cartIdMap = new Map(
-    cartItems.map((item) => [String(item.course_id), item.id])
+    cartItems.filter((item) => item.course_id != null).map((item) => [String(item.course_id), item.id])
   )
 
   const wishlistedCourses = courses.filter((c) => wishlistIds.has(c.id))
