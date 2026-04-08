@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
+import os
+import uuid
 from typing import List, Optional
-import os, uuid
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from sqlalchemy.orm import Session
+
 from app.database import get_db
 from app.dependencies import get_current_student_id
 from app.models.post import Post, Comment, PostLike
-from app.models.user import User
-from app.schemas.post import PostCreate, PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse
+from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse
 
 UPLOAD_DIR = "static/uploads/posts"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
