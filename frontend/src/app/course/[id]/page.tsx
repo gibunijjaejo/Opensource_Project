@@ -63,7 +63,7 @@ function ResearchAreaCard({ summary }: { summary: string }) {
                 }
             >
                 <div className="ai-border-wrap rounded-lg p-[2px]">
-                    <div className="rounded-lg p-3" style={{ background: "#7c3aed08" }}>
+                    <div className="rounded-lg bg-card p-3">
                         <div className="flex items-center gap-2 mb-2">
                             <span
                                 className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium"
