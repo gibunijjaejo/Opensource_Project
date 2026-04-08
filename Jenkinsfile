@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        BACKEND_URL     = 'http://localhost:8088'
+        BACKEND_URL     = 'http://localhost:8080'
         FRONTEND_URL    = 'http://localhost:3000'
         DISCORD_WEBHOOK = credentials('discord-webhook')
     }
