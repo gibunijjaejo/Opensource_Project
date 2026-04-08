@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -48,8 +48,9 @@ async def summarize_syllabus(
     return _build_response(detail, course, cached)
 
 
+@router.get("/{course_id}/pdf/{filename:path}", include_in_schema=False)
 @router.get("/{course_id}/pdf")
-def get_syllabus_pdf(course_id: int, db: Session = Depends(get_db)):
+def get_syllabus_pdf(course_id: int, db: Session = Depends(get_db), filename: str = ""):
     detail = db.query(CourseDetail).filter(CourseDetail.course_id == course_id).first()
     if not detail or not detail.pdf_hash:
         raise HTTPException(status_code=404, detail="강의계획서 PDF가 없습니다")
@@ -58,7 +59,16 @@ def get_syllabus_pdf(course_id: int, db: Session = Depends(get_db)):
     if not pdf_path:
         raise HTTPException(status_code=404, detail="PDF 파일을 찾을 수 없습니다")
 
-    return FileResponse(str(pdf_path), media_type="application/pdf")
+    from urllib.parse import quote
+    course = db.query(Course).filter(Course.course_id == course_id).first()
+    filename = f"{course.course_name} 강의계획서.pdf" if course else "강의계획서.pdf"
+    encoded = quote(filename, safe="")
+    content = pdf_path.read_bytes()
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded}"},
+    )
 
 
 @router.get("/{course_id}", response_model=SyllabusSummaryResponse)
