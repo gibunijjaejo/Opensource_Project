@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-BACKEND_URL="${BACKEND_URL:-http://localhost:8080}"
+BACKEND_URL="${BACKEND_URL:-http://localhost:8088}"
 FRONTEND_URL="${FRONTEND_URL:-http://localhost:3000}"
 MAX_RETRY=24
 WAIT=5
