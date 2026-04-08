@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     environment {
-        BACKEND_URL  = 'http://localhost:8088'
-        FRONTEND_URL = 'http://localhost:3000'
+        BACKEND_URL     = 'http://localhost:8080'
+        FRONTEND_URL    = 'http://localhost:3000'
+        DISCORD_WEBHOOK = credentials('discord-webhook')
     }
 
     stages {
@@ -105,10 +106,30 @@ pipeline {
 
     post {
         success {
-            echo '배포 성공'
+            sh '''
+                curl -s -X POST "$DISCORD_WEBHOOK" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \\"embeds\\": [{
+                      \\"title\\": \\"✅ 배포 성공\\",
+                      \\"description\\": \\"**브랜치:** ${GIT_BRANCH}\\\\n**커밋:** ${GIT_COMMIT?.take(8)}\\\\n**빌드:** #${BUILD_NUMBER}\\",
+                      \\"color\\": 3066993
+                    }]
+                  }"
+            '''
         }
         failure {
-            echo '파이프라인 실패 — 로그를 확인하세요'
+            sh '''
+                curl -s -X POST "$DISCORD_WEBHOOK" \
+                  -H "Content-Type: application/json" \
+                  -d "{
+                    \\"embeds\\": [{
+                      \\"title\\": \\"❌ 빌드 실패\\",
+                      \\"description\\": \\"**브랜치:** ${GIT_BRANCH}\\\\n**커밋:** ${GIT_COMMIT?.take(8)}\\\\n**빌드:** #${BUILD_NUMBER}\\\\n**로그:** ${BUILD_URL}console\\",
+                      \\"color\\": 15158332
+                    }]
+                  }"
+            '''
         }
     }
 }
