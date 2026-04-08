@@ -288,11 +288,10 @@ export default function CourseDetailPage({ params }: Props) {
                             {activeTab === "syllabus" && (
                                 <div className="flex flex-col gap-6">
                                     {/* 필요 역량 / 평가 방식 / 수업 방식 / 키워드 */}
-                                    {course.details ? (
-                                        <div className="flex flex-col gap-4">
-                                            {course.details.pdf_hash && (
+                                    <div className="flex flex-col gap-4">
+                                            {course.details?.pdf_hash ? (
                                                 <a
-                                                    href={`${process.env.NEXT_PUBLIC_API_URL}/api/v1/syllabus/${course.course_id}/pdf`}
+                                                    href={`${process.env.NEXT_PUBLIC_API_URL}/api/v1/syllabus/${course.course_id}/pdf/${encodeURIComponent(course.course_name + " 강의계획서.pdf")}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-md border text-xs font-medium transition-colors hover:opacity-80"
@@ -301,8 +300,13 @@ export default function CourseDetailPage({ params }: Props) {
                                                     <FileText className="h-3.5 w-3.5" />
                                                     강의계획서 보러가기
                                                 </a>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-md border text-xs font-medium cursor-not-allowed border-border text-muted-foreground bg-muted/30">
+                                                    <FileText className="h-3.5 w-3.5" />
+                                                    강의계획서 보러가기
+                                                </span>
                                             )}
-                                            {course.details.required_skills && (
+                                            {course.details?.required_skills && (
                                                 <div className="rounded-md border border-border bg-card p-4">
                                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                                                         필요 역량
@@ -312,7 +316,7 @@ export default function CourseDetailPage({ params }: Props) {
                                                     </p>
                                                 </div>
                                             )}
-                                            {course.details.evaluation_method && (
+                                            {course.details?.evaluation_method && (
                                                 <div className="rounded-md border border-border bg-card p-4">
                                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                                                         평가 방식
@@ -322,7 +326,7 @@ export default function CourseDetailPage({ params }: Props) {
                                                     </p>
                                                 </div>
                                             )}
-                                            {course.details.teaching_method && (
+                                            {course.details?.teaching_method && (
                                                 <div className="rounded-md border border-border bg-card p-4">
                                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                                                         수업 방식
@@ -332,7 +336,7 @@ export default function CourseDetailPage({ params }: Props) {
                                                     </p>
                                                 </div>
                                             )}
-                                            {course.details.keyword && (
+                                            {course.details?.keyword && (
                                                 <div className="rounded-md border border-border bg-card p-4">
                                                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
                                                         키워드
@@ -343,7 +347,6 @@ export default function CourseDetailPage({ params }: Props) {
                                                 </div>
                                             )}
                                         </div>
-                                    ) : null}
                                 </div>
                             )}
 
