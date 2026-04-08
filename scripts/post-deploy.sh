@@ -3,7 +3,7 @@ set -e
 
 BACKEND_URL="${BACKEND_URL:-http://localhost:8080}"
 FRONTEND_URL="${FRONTEND_URL:-http://localhost:3000}"
-MAX_RETRY=10
+MAX_RETRY=24
 WAIT=5
 
 echo "=== 배포 후 헬스체크 시작 ==="
