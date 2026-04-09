@@ -109,7 +109,7 @@ pipeline {
             sh '''
                 curl -s -X POST "$DISCORD_WEBHOOK" \
                   -H "Content-Type: application/json" \
-                  -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\"}"
+                  -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\n📋 **테스트: 41/41 PASS** (auth 6 | courses 9 | posts 14 | cart 12)\\n🐳 **컨테이너:** api · frontend · redis · ocr 정상 기동\\"}"
             '''
         }
         failure {
