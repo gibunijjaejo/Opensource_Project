@@ -29,6 +29,7 @@ from app.models.course import Course, CourseDetail
 from app.models.professor import Professor  # noqa: F401 — relationship 해소용
 from app.models.activity import Track       # noqa: F401 — relationship 해소용
 from app.models.user import User            # noqa: F401 — relationship 해소용
+from app.models.post import Post            # noqa: F401 — relationship 해소용
 from app.services.syllabus_service import extract_pdf_text, summarize_with_groq
 
 
@@ -80,15 +81,19 @@ def process_pdf(db: Session, pdf_path: Path, year: int, semester: int) -> str:
                 Course.semester == semester,
             )
         )
-        # 교수 이름으로 정확한 분반 매칭 (모든 공백 제거 후 비교)
+        # 교수 이름으로 정확한 분반 매칭 (모든 공백 제거 후 비교, 실패 시 퍼지 매칭)
         if professor_name:
+            from rapidfuzz import fuzz
             pdf_name_clean = professor_name.replace("교수님", "").replace("교수", "").strip()
             pdf_name_no_space = "".join(pdf_name_clean.split())
+            # PDF 인코딩 오류로 섞인 한글/영문 외 문자(그리스어 등) 제거
+            pdf_name_no_space = re.sub(r'[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318Fa-zA-Z]', '', pdf_name_no_space)
             all_sections = (
                 base_query
                 .join(Professor, Course.professor_id == Professor.professor_id)
                 .all()
             )
+            # 1차: 완전 일치
             matched = [
                 c for c in all_sections
                 if "".join((c.professor.name or "").split()) == pdf_name_no_space
@@ -96,6 +101,17 @@ def process_pdf(db: Session, pdf_path: Path, year: int, semester: int) -> str:
             if matched:
                 courses_to_save = matched
                 break
+            # 2차: 퍼지 매칭 (PDF 인코딩 오류로 이름이 일부 깨진 경우 대응)
+            if all_sections:
+                best = max(
+                    all_sections,
+                    key=lambda c: fuzz.ratio(pdf_name_no_space, "".join((c.professor.name or "").split()))
+                )
+                best_score = fuzz.ratio(pdf_name_no_space, "".join((best.professor.name or "").split()))
+                if best_score >= 60:
+                    print(f"    [FUZZY] '{pdf_name_no_space}' → '{best.professor.name}' (유사도 {best_score:.0f}%)")
+                    courses_to_save = [best]
+                    break
 
         # 교수 이름 매칭 실패 시
         if not courses_to_save:
