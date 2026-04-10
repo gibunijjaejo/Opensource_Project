@@ -110,7 +110,7 @@ pipeline {
             steps {
                 sh '''
                     docker compose down --remove-orphans || true
-                    docker rm -f seoganpyo-redis seoganpyo-api seoganpyo-frontend seoganpyo-ocr seoganpyo-sonar 2>/dev/null || true
+                    docker rm -f seoganpyo-redis seoganpyo-api seoganpyo-frontend seoganpyo-ocr 2>/dev/null || true
                     docker compose up --build -d
                 '''
             }
