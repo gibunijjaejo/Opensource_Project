@@ -78,7 +78,27 @@ pipeline {
             }
         }
 
-        // ── 4. 배포 전 점검 ───────────────────────────────────────────
+        // ── 4. SonarQube 정적 분석 ───────────────────────────────────
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh '''
+                        sonar-scanner \
+                            -Dsonar.login=${SONAR_AUTH_TOKEN}
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        // ── 5. 배포 전 점검 ───────────────────────────────────────────
         stage('Pre-Deploy Check') {
             steps {
                 sh 'bash scripts/pre-deploy.sh'
