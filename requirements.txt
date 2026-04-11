@@ -29,6 +29,7 @@ websockets==16.0
 rapidfuzz==3.13.0
 httpx==0.27.0
 groq>=0.9.0
+claude-agent-sdk>=0.0.10
 pypdf>=4.0.0
 beautifulsoup4==4.12.3
 pytest>=8.0.0
