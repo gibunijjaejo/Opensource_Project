@@ -19,5 +19,7 @@ if [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ] || [ -z "$DB_HOST" ] || [ -z "$DB_
   exit 1
 fi
 
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 exec npx -y @modelcontextprotocol/server-postgres \
   "postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"

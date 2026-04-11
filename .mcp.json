@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "postgres": {
-      "command": "bash",
-      "args": ["scripts/mcp-postgres.sh"]
+      "command": "/bin/bash",
+      "args": ["/Users/gimminji/Desktop/seoganpyo/scripts/mcp-postgres.sh"]
     }
   }
 }
