@@ -1,0 +1,128 @@
+// 서간표 (Seoganpyo) ERD
+// https://dbdiagram.io 에 붙여넣으면 ERD 이미지가 생성됩니다.
+
+Table users {
+  student_id int [pk, note: '학번']
+  name varchar(50) [not null]
+  email varchar(100) [unique, not null]
+  password varchar(255) [not null]
+  current_semester smallint
+  interests text [default: '']
+  target_careers text [default: '']
+  major_credits int [default: 0]
+  common_credits int [default: 0]
+  total_credits int [default: 0]
+  total_english smallint [default: 0]
+}
+
+Table professors {
+  professor_id int [pk]
+  name varchar(100) [not null]
+  course_name varchar(255)
+  lab varchar(100)
+}
+
+Table professor_details {
+  professor_id int [pk, note: 'FK → professors']
+  name varchar(100)
+  email varchar(100)
+  specialty varchar(255)
+  research_area text
+  research_summary text
+  homepage varchar(255)
+}
+
+Table tracks {
+  track_id int [pk]
+  track_name varchar(100) [not null, note: '데이터분석·백엔드·프론트엔드 등 14개']
+}
+
+Table courses {
+  course_id int [pk, increment]
+  course_code varchar(20) [not null]
+  course_name varchar(255) [not null]
+  credits int
+  target_grade varchar(20)
+  is_english boolean [default: false]
+  class_days varchar(50)
+  class_start_time varchar(10)
+  class_end_time varchar(10)
+  professor_id int [note: 'FK → professors']
+  year int
+  semester int
+  course_category varchar(50)
+}
+
+Table course_details {
+  course_id int [pk, note: 'FK → courses']
+  required_skills text
+  evaluation_method text
+  teaching_method text
+  track_id int [note: 'FK → tracks']
+  keyword varchar(255)
+  overview text
+  pdf_hash varchar(64)
+}
+
+Table posts {
+  id int [pk, increment]
+  category varchar(50) [not null]
+  title varchar(255) [not null]
+  content text [not null]
+  student_id int [not null, note: 'FK → users']
+  file_path varchar(500)
+  file_name varchar(255)
+  is_anonymous boolean [default: false, not null]
+  created_at datetime
+}
+
+Table comments {
+  id int [pk, increment]
+  post_id int [not null, note: 'FK → posts']
+  content text [not null]
+  student_id int [not null, note: 'FK → users']
+  created_at datetime
+}
+
+Table post_likes {
+  id int [pk, increment]
+  post_id int [not null, note: 'FK → posts']
+  student_id int [not null, note: 'FK → users']
+}
+
+Table histories {
+  id int [pk, increment]
+  student_id int [note: 'FK → users']
+  course_code varchar(20) [not null]
+  year int
+  semester int
+  is_retake boolean [default: false]
+}
+
+Table carts {
+  id int [pk, increment]
+  student_id int [note: 'FK → users']
+  course_id int [note: 'FK → courses']
+}
+
+// ── Relations ──────────────────────────────────────────────────────────────
+
+// 교수
+Ref: professor_details.professor_id - professors.professor_id  // 1:1
+
+// 강의
+Ref: courses.professor_id > professors.professor_id            // N:1
+Ref: course_details.course_id - courses.course_id             // 1:1
+Ref: course_details.track_id > tracks.track_id                // N:1
+
+// 학생 활동
+Ref: histories.student_id > users.student_id                  // N:1
+Ref: carts.student_id > users.student_id                      // N:1
+Ref: carts.course_id > courses.course_id                      // N:1
+
+// 게시판
+Ref: posts.student_id > users.student_id                      // N:1
+Ref: comments.post_id > posts.id                              // N:1
+Ref: comments.student_id > users.student_id                   // N:1
+Ref: post_likes.post_id > posts.id                            // N:1
+Ref: post_likes.student_id > users.student_id                 // N:1

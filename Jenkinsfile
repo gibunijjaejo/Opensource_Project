@@ -5,6 +5,7 @@ pipeline {
         BACKEND_URL     = 'http://localhost:8080'
         FRONTEND_URL    = 'http://localhost:3000'
         DISCORD_WEBHOOK = credentials('discord-webhook')
+        FAILED_STAGE    = 'Unknown'   // 실패 단계 추적용 (각 stage에서 덮어씀)
     }
 
     stages {
@@ -19,6 +20,9 @@ pipeline {
 
         // ── 2. CI: 코드 품질 점검 ─────────────────────────────────────
         stage('CI - Lint & Check') {
+            steps {
+                script { env.FAILED_STAGE = 'CI - Lint & Check' }
+            }
             parallel {
 
                 stage('Backend Lint') {
@@ -51,6 +55,7 @@ pipeline {
         // ── 3. 테스트 & 커버리지 ─────────────────────────────────────
         stage('Test & Coverage') {
             steps {
+                script { env.FAILED_STAGE = 'Test & Coverage' }
                 sh '''
                     python3 -m venv .venv-test
                     .venv-test/bin/pip install -r requirements.txt --quiet
@@ -81,6 +86,7 @@ pipeline {
         // ── 4. SonarQube 정적 분석 ───────────────────────────────────
         stage('SonarQube Analysis') {
             steps {
+                script { env.FAILED_STAGE = 'SonarQube Analysis' }
                 withSonarQubeEnv('sonarqube') {
                     script {
                         def scannerHome = tool 'sonar'
@@ -92,6 +98,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
+                script { env.FAILED_STAGE = 'Quality Gate' }
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -101,13 +108,15 @@ pipeline {
         // ── 5. 배포 전 점검 ───────────────────────────────────────────
         stage('Pre-Deploy Check') {
             steps {
+                script { env.FAILED_STAGE = 'Pre-Deploy Check' }
                 sh 'bash scripts/pre-deploy.sh'
             }
         }
 
-        // ── 5. Docker 빌드 & 배포 ─────────────────────────────────────
+        // ── 6. Docker 빌드 & 배포 ─────────────────────────────────────
         stage('Deploy') {
             steps {
+                script { env.FAILED_STAGE = 'Deploy' }
                 sh '''
                     docker compose down --remove-orphans || true
                     docker rm -f seoganpyo-redis seoganpyo-api seoganpyo-frontend seoganpyo-ocr 2>/dev/null || true
@@ -116,9 +125,10 @@ pipeline {
             }
         }
 
-        // ── 6. 배포 후 헬스체크 ───────────────────────────────────────
+        // ── 7. 배포 후 헬스체크 ───────────────────────────────────────
         stage('Post-Deploy Check') {
             steps {
+                script { env.FAILED_STAGE = 'Post-Deploy Check' }
                 sh 'bash scripts/post-deploy.sh'
             }
         }
@@ -127,17 +137,31 @@ pipeline {
 
     post {
         success {
+            // Discord Embed 카드 (성공)
             sh '''
-                curl -s -X POST "$DISCORD_WEBHOOK" \
-                  -H "Content-Type: application/json" \
-                  -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\n📋 **테스트: 41/41 PASS** (auth 6 | courses 9 | posts 14 | cart 12)\\n🐳 **컨테이너:** api · frontend · redis · ocr 정상 기동\\"}"
+                python3 scripts/analyze_logs.py \
+                  --mode success \
+                  --build-number "${BUILD_NUMBER}" \
+                  --branch "${GIT_BRANCH}" \
+                  --webhook "${DISCORD_WEBHOOK}" \
+                || curl -s -X POST "$DISCORD_WEBHOOK" \
+                     -H "Content-Type: application/json" \
+                     -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\"}"
             '''
         }
         failure {
+            // Docker 컨테이너 로그 수집 → Groq AI 분석 → Discord Embed 카드 (실패)
             sh '''
-                curl -s -X POST "$DISCORD_WEBHOOK" \
-                  -H "Content-Type: application/json" \
-                  -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"❌ **빌드 실패** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH} | Jenkins에서 로그 확인\\"}"
+                python3 scripts/analyze_logs.py \
+                  --mode failure \
+                  --build-number "${BUILD_NUMBER}" \
+                  --branch "${GIT_BRANCH}" \
+                  --failed-stage "${FAILED_STAGE}" \
+                  --webhook "${DISCORD_WEBHOOK}" \
+                  --containers seoganpyo-api seoganpyo-frontend seoganpyo-ocr \
+                || curl -s -X POST "$DISCORD_WEBHOOK" \
+                     -H "Content-Type: application/json" \
+                     -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"❌ **빌드 실패** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH} | 실패 단계: ${FAILED_STAGE}\\"}"
             '''
         }
     }
