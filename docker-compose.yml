@@ -81,5 +81,20 @@ services:
             backend:
                 condition: service_healthy
 
+    # SonarQube 코드 품질 분석 서버
+    sonarqube:
+        image: sonarqube:community
+        container_name: seoganpyo-sonar
+        restart: always
+        ports:
+            - "9000:9000"
+        volumes:
+            - sonarqube_data:/opt/sonarqube/data
+            - sonarqube_logs:/opt/sonarqube/logs
+            - sonarqube_extensions:/opt/sonarqube/extensions
+
 volumes:
     paddle_model_cache:
+    sonarqube_data:
+    sonarqube_logs:
+    sonarqube_extensions:
