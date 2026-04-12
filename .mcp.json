@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "postgres": {
-      "command": "/bin/bash",
-      "args": ["scripts/mcp-postgres.sh"]
+      "command": "/opt/homebrew/bin/node",
+      "args": ["scripts/mcp-postgres.mjs"]
     }
   }
 }
