@@ -31,6 +31,7 @@ class Comment(Base):
 
     post = relationship("Post", back_populates="comments")
     author = relationship("User", back_populates="comments")
+    likes = relationship("CommentLike", back_populates="comment", cascade="all, delete-orphan")
 
 
 class PostLike(Base):
@@ -40,3 +41,12 @@ class PostLike(Base):
     student_id = Column(Integer, ForeignKey("users.student_id"), nullable=False)
 
     post = relationship("Post", back_populates="likes")
+
+
+class CommentLike(Base):
+    __tablename__ = "comment_likes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    comment_id = Column(Integer, ForeignKey("comments.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("users.student_id"), nullable=False)
+
+    comment = relationship("Comment", back_populates="likes")
