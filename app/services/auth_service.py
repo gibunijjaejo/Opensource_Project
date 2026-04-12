@@ -1,0 +1,30 @@
+import random
+import redis
+from app.services.email_service import send_verification_email
+
+# redis로 연결
+redis_client = redis.StrictRedis(host='redis', port=6379, db=0, decode_responses=True)
+
+def request_email_verification(email: str, background_tasks):
+    auth_code = f"{random.randint(0, 999999):06d}"
+    redis_client.set(email, auth_code, ex=180) # TTL 3분, 6자리 OTP
+    background_tasks.add_task(send_verification_email, email, auth_code)
+
+def verify_auth_code(email: str, code: str): # 캐시와 값 같아서 인증 성공시 캐시 삭제
+    saved_code = redis_client.get(email)
+    if saved_code == code:
+        redis_client.delete(email)
+        return {"success": True, "message": "인증에 성공했습니다!"}
+    return {"success": False, "message": "인증번호가 일치하지 않거나 만료되었습니다."}
+
+def request_password_reset(email: str, background_tasks):
+    auth_code = f"{random.randint(0, 999999):06d}"
+    redis_client.set(f"reset:{email}", auth_code, ex=180)  # 회원가입 OTP와 키 분리
+    background_tasks.add_task(send_verification_email, email, auth_code)
+
+def verify_reset_code(email: str, code: str) -> bool:
+    saved_code = redis_client.get(f"reset:{email}")
+    if saved_code == code:
+        redis_client.delete(f"reset:{email}")
+        return True
+    return False

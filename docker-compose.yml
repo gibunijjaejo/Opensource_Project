@@ -1,0 +1,100 @@
+services:
+    # 인증용 임시 저장소 (Redis)
+    redis:
+        image: redis:alpine
+        container_name: seoganpyo-redis
+        restart: always
+        ports:
+            - "6379:6379"
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # PaddleOCR 마이크로서비스 (이미지 → 텍스트 블록)
+    ocr-service:
+        build:
+            context: ./ocr-service
+        container_name: seoganpyo-ocr
+        restart: always
+        ports:
+            - "8001:8000"
+        volumes:
+            - paddle_model_cache:/root/.paddleocr
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
+
+    # FastAPI 백엔드
+    backend:
+        build: .
+        container_name: seoganpyo-api
+        restart: always
+        ports:
+            - "8080:8000"
+        volumes:
+            - ./data:/app/data
+            - ./static:/app/static
+        env_file:
+            - .env
+        environment:
+            - REDIS_URL=redis://redis:6379/0
+            - OCR_SERVICE_URL=http://ocr-service:8000
+        command:
+            [
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+            ]
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        depends_on:
+            redis:
+                condition: service_healthy
+            ocr-service:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 20s
+
+    # Next.js 프론트엔드
+    frontend:
+        build:
+            context: ./frontend
+            args:
+                - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        container_name: seoganpyo-frontend
+        restart: always
+        ports:
+            - "3000:3000"
+        depends_on:
+            backend:
+                condition: service_healthy
+
+    # SonarQube 코드 품질 분석 서버
+    sonarqube:
+        image: sonarqube:community
+        container_name: seoganpyo-sonar
+        restart: always
+        ports:
+            - "9000:9000"
+        volumes:
+            - sonarqube_data:/opt/sonarqube/data
+            - sonarqube_logs:/opt/sonarqube/logs
+            - sonarqube_extensions:/opt/sonarqube/extensions
+
+volumes:
+    paddle_model_cache:
+    sonarqube_data:
+    sonarqube_logs:
+    sonarqube_extensions:
