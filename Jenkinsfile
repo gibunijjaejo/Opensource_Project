@@ -14,7 +14,20 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
-                echo "브랜치: ${env.GIT_BRANCH} | 커밋: ${env.GIT_COMMIT?.take(8)}"
+                script {
+                    def commit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    def marker = "/var/lib/jenkins/.seoganpyo_last_commit"
+                    def last   = sh(script: "cat ${marker} 2>/dev/null || echo ''", returnStdout: true).trim()
+                    if (last == commit) {
+                        echo "동일 커밋(${commit.take(8)}) — 재빌드 건너뜀"
+                        currentBuild.result = 'ABORTED'
+                        throw new org.jenkinsci.plugins.workflow.steps.FlowInterruptedException(
+                            hudson.model.Result.ABORTED
+                        )
+                    }
+                    sh "echo '${commit}' > ${marker}"
+                    echo "브랜치: ${env.GIT_BRANCH} | 커밋: ${commit.take(8)}"
+                }
             }
         }
 

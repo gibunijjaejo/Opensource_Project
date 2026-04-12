@@ -26,6 +26,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv(PROJECT_ROOT / ".env")
+except ImportError:
+    pass  # python-dotenv 미설치 시 환경변수는 시스템/Jenkins에서 주입됨
 
 # ── 상수 ────────────────────────────────────────────────────────────────────
 
