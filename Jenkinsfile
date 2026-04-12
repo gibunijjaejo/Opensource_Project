@@ -119,7 +119,6 @@ pipeline {
                 script { env.FAILED_STAGE = 'Deploy' }
                 sh '''
                     docker compose down --remove-orphans || true
-                    docker rm -f seoganpyo-redis seoganpyo-api seoganpyo-frontend seoganpyo-ocr 2>/dev/null || true
                     docker compose up --build -d
                 '''
             }
