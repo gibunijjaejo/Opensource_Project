@@ -35,6 +35,7 @@ export default function LoginPage() {
     try {
       const token = await authApi.login(email, password)
       localStorage.setItem("access_token", token.access_token)
+      document.cookie = `access_token=${token.access_token}; path=/; SameSite=Strict; max-age=${60 * 60 * 24}`
       router.push("/")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.")
