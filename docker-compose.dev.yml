@@ -1,0 +1,64 @@
+# 로컬 개발용 override
+# 사용법: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# prod(docker-compose.yml)와 달라지는 부분만 선언합니다.
+
+services:
+    # 로컬 PostgreSQL (테스트/스키마 실험 전용)
+    # 평소 개발은 팀 DB(163.239.77.77) 사용 — 이 컨테이너는 띄워지지만 백엔드가 붙지 않음
+    # 테스트 시: DB_HOST=db 로 override하거나 TEST_DATABASE_URL 환경변수 사용
+    db:
+        image: postgres:16-alpine
+        container_name: seoganpyo-db
+        restart: always
+        environment:
+            POSTGRES_USER: ${DB_USER:-postgres}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+            POSTGRES_DB: ${DB_NAME:-seoganpyo}
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres_dev_data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-seoganpyo}"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # 백엔드: --reload + 전체 코드 마운트 (핫리로드), 팀 DB 사용
+    backend:
+        volumes:
+            - .:/app
+        command:
+            [
+                "uvicorn",
+                "app.main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--reload",
+            ]
+        depends_on:
+            redis:
+                condition: service_healthy
+            ocr-service:
+                condition: service_healthy
+
+    # 프론트엔드: 빌드 이미지 대신 pnpm dev (HMR)
+    frontend:
+        build:
+            context: ./frontend
+            dockerfile: Dockerfile.dev
+        environment:
+            - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+        volumes:
+            - ./frontend:/app
+            - /app/node_modules
+            - /app/.next
+        command: ["pnpm", "dev"]
+        ports:
+            - "3000:3000"
+
+volumes:
+    postgres_dev_data:
