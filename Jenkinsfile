@@ -162,7 +162,7 @@ pipeline {
             script {
                 def cleanBranch = env.BRANCH_SHORT ?: env.GIT_BRANCH.replaceAll('origin/', '')
                 sh """
-                    python3 scripts/analyze_logs.py \
+                    /var/lib/jenkins/.venv-scripts/bin/python3 scripts/analyze_logs.py \
                       --mode success \
                       --build-number "${env.BUILD_NUMBER}" \
                       --branch "${cleanBranch}" \
@@ -178,7 +178,7 @@ pipeline {
             script {
                 def cleanBranch = env.BRANCH_SHORT ?: env.GIT_BRANCH.replaceAll('origin/', '')
                 sh """
-                    python3 scripts/analyze_logs.py \
+                    /var/lib/jenkins/.venv-scripts/bin/python3 scripts/analyze_logs.py \
                       --mode failure \
                       --build-number "${env.BUILD_NUMBER}" \
                       --branch "${cleanBranch}" \
