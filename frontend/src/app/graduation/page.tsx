@@ -482,6 +482,11 @@ export default function GraduationPage() {
                               <span className="text-xs font-mono text-muted-foreground">
                                 {course.course_code}
                               </span>
+                              {course.professor?.name && (
+                                <span className="text-xs text-muted-foreground">
+                                  {course.professor.name}
+                                </span>
+                              )}
                               {course.course_category && (
                                 <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
                                   {course.course_category}
