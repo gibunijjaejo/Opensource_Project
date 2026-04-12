@@ -6,6 +6,11 @@ services:
         restart: always
         ports:
             - "6379:6379"
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
 
     # PaddleOCR 마이크로서비스 (이미지 → 텍스트 블록)
     ocr-service:
@@ -17,6 +22,12 @@ services:
             - "8001:8000"
         volumes:
             - paddle_model_cache:/root/.paddleocr
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
 
     # FastAPI 백엔드
     backend:
@@ -26,7 +37,8 @@ services:
         ports:
             - "8080:8000"
         volumes:
-            - .:/app
+            - ./data:/app/data
+            - ./static:/app/static
         env_file:
             - .env
         environment:
@@ -40,13 +52,20 @@ services:
                 "0.0.0.0",
                 "--port",
                 "8000",
-                "--reload",
             ]
         extra_hosts:
             - "host.docker.internal:host-gateway"
         depends_on:
-            - redis
-            - ocr-service
+            redis:
+                condition: service_healthy
+            ocr-service:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 20s
 
     # Next.js 프론트엔드
     frontend:
@@ -59,7 +78,8 @@ services:
         ports:
             - "3000:3000"
         depends_on:
-            - backend
+            backend:
+                condition: service_healthy
 
 volumes:
     paddle_model_cache:
