@@ -7,7 +7,7 @@ from app.services.crawl_service import crawl_and_upsert
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-ADMIN_SECRET = os.getenv("ADMIN_SECRET_KEY", "change-me-in-production")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET_KEY")
 
 
 def verify_admin(x_admin_key: str = Header(...)):

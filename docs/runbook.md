@@ -13,7 +13,7 @@
 | seoganpyo-api | 8080 | FastAPI 백엔드 |
 | seoganpyo-redis | 6379 | 인증 OTP 임시 저장 (3분 TTL) |
 | seoganpyo-ocr | 8001 | PaddleOCR 시간표 인식 |
-| PostgreSQL (외부) | 5432 | 163.239.77.77 / DB: seoganpyo |
+| PostgreSQL (외부) | 8000 | 163.239.77.77 / DB: seoganpyo |
 
 **CI/CD 흐름:**
 ```
@@ -47,7 +47,7 @@ main             | api · frontend · redis · ocr 정상 기동
 main             | Deploy
 ─────────────────────────────
 📋 에러 로그 미리보기
-  [seoganpyo-api] ERROR: Connection refused (port 5432)
+  [seoganpyo-api] ERROR: Connection refused (port 8000)
   ...
 ─────────────────────────────
 🤖 AI 장애 분석
@@ -218,7 +218,7 @@ with engine.connect() as conn:
 ```bash
 # DB 서버 도달 가능 여부 확인
 ping 163.239.77.77
-nc -zv 163.239.77.77 5432
+nc -zv 163.239.77.77 8000
 
 # .env DB 설정 재확인
 cat .env | grep DB_
@@ -266,7 +266,7 @@ python3 scripts/analyze_logs.py \
 ## 7. 배포 체크리스트
 
 ### 배포 전
-- [ ] `.env` 파일 존재 및 필수값 (`DB_*`, `SENDER_*`, `GROQ_API_KEY`) 확인
+- [ ] `.env` 파일 존재 및 필수값 (`DB_*`, `SECRET_KEY`, `ADMIN_SECRET_KEY`, `SENDER_*`, `GROQ_API_KEY`) 확인
 - [ ] `data/syllabi/`, `static/uploads/posts/` 디렉토리 존재 확인
 - [ ] DB 스키마 변경 시 `ALTER TABLE` 먼저 실행
 - [ ] Docker 데몬 실행 중인지 확인: `docker ps`
@@ -279,12 +279,28 @@ python3 scripts/analyze_logs.py \
 
 ---
 
-## 8. 전체 서비스 명령어
+## 8. 서비스 명령어
 
 ```bash
-# 전체 시작
-docker compose up -d
+# 로컬 개발 (--reload + HMR + 팀 DB 연결)
+make dev
 
+# VDI 배포 (pre-check → build → post-check)
+make prod
+
+# 중지
+make down
+
+# 로그 스트리밍
+make logs
+
+# 컨테이너 상태
+make ps
+```
+
+직접 실행이 필요한 경우:
+
+```bash
 # 코드 변경 후 재빌드 (전체)
 docker compose up --build -d
 
@@ -292,16 +308,68 @@ docker compose up --build -d
 docker compose up --build -d seoganpyo-api
 docker compose up --build -d seoganpyo-frontend
 
-# 중지
-docker compose down
-
 # 완전 초기화 (볼륨 포함 삭제 — 주의)
 docker compose down -v --remove-orphans
 ```
 
 ---
 
-## 9. 에스컬레이션 기준
+## 9. VDI 서버 환경 설정
+
+### 최초 1회 설정
+
+**1. 포트 포워딩 (외부 접근용)**
+```bash
+# VDI 방화벽에서 아래 포트 오픈 필요 (학교 네트워크 정책 확인)
+# 3000 — Next.js 프론트엔드
+# 8080 — FastAPI 백엔드
+# 8001 — OCR 서비스 (내부용, 외부 오픈 불필요)
+# 6379 — Redis (내부용, 외부 오픈 불필요)
+
+# Ubuntu UFW 기준
+sudo ufw allow 3000/tcp
+sudo ufw allow 8080/tcp
+sudo ufw reload
+sudo ufw status
+```
+
+**2. Docker & Docker Compose 설치 확인**
+```bash
+docker --version        # 24.x 이상 권장
+docker compose version  # v2.x 이상 권장
+```
+
+**3. 프로젝트 클론 및 환경변수 설정**
+```bash
+git clone https://github.com/gibunijjaejo/Opensource_Project.git
+cd Opensource_Project
+cp .env.example .env
+# .env 편집: 실제 값으로 채우기
+```
+
+**4. 외부 PostgreSQL 연결 확인**
+```bash
+psql -h 163.239.77.77 -p 8000 -U <DB_USER> -d seoganpyo -c "SELECT 1"
+```
+
+**5. 최초 배포**
+```bash
+make prod
+```
+
+### 접속 주소
+
+| 환경 | URL |
+|------|-----|
+| 프론트엔드 | `http://<VDI_IP>:3000` |
+| 백엔드 API | `http://<VDI_IP>:8080` |
+| API 문서 | `http://<VDI_IP>:8080/docs` |
+
+> VDI IP는 `hostname -I` 또는 `ip addr show` 로 확인
+
+---
+
+## 10. 에스컬레이션 기준
 
 | 상황 | 대응 |
 |------|------|
@@ -313,7 +381,7 @@ docker compose down -v --remove-orphans
 
 ---
 
-## 10. Jenkins 수동 분석 (긴급 시)
+## 11. Jenkins 수동 분석 (긴급 시)
 
 Discord AI 분석 카드를 받지 못했거나 직접 분석하고 싶을 때:
 

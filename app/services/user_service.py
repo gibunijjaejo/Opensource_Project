@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from app.models.user import User
 
-SECRET_KEY = os.getenv("SECRET_KEY", "seoganpyo-secret-key")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24시간
 

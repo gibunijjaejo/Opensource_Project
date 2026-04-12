@@ -12,7 +12,7 @@ fi
 
 # 2. 필수 환경변수 확인
 echo "[2/4] 필수 환경변수 확인..."
-REQUIRED_VARS=("DB_USER" "DB_PASSWORD" "DB_HOST" "DB_NAME" "SENDER_EMAIL")
+REQUIRED_VARS=("DB_USER" "DB_PASSWORD" "DB_HOST" "DB_NAME" "SECRET_KEY" "ADMIN_SECRET_KEY" "SENDER_EMAIL" "SENDER_PASSWORD")
 for var in "${REQUIRED_VARS[@]}"; do
     if ! grep -q "^${var}=" .env; then
         echo "ERROR: .env에 ${var}가 없습니다."
