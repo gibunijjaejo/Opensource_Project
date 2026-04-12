@@ -118,7 +118,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@university.ac.kr"
+                  placeholder="student@sogang.ac.kr"
                   className="pl-10"
                   required
                 />
@@ -173,25 +173,6 @@ export default function LoginPage() {
               {isLoading ? "로그인 중..." : "로그인"}
             </Button>
           </form>
-
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-background px-2 text-muted-foreground">또는</span>
-            </div>
-          </div>
-
-          {/* SSO Button */}
-          <Button
-            variant="outline"
-            className="w-full h-10"
-            onClick={() => router.push("/")}
-          >
-            학교 SSO로 로그인
-          </Button>
 
           {/* Sign up link */}
           <p className="mt-6 text-center text-sm text-muted-foreground">

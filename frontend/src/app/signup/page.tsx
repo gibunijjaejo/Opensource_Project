@@ -10,10 +10,12 @@ import { Input } from "@/components/ui/input"
 import { authApi } from "@/lib/api"
 
 type Step = "form" | "verify"
+type ModalType = "terms" | "privacy" | null
 
 export default function SignupPage() {
   const router = useRouter()
   const [step, setStep] = useState<Step>("form")
+  const [modal, setModal] = useState<ModalType>(null)
   const [formData, setFormData] = useState({
     name: "",
     studentId: "",
@@ -112,7 +114,7 @@ export default function SignupPage() {
                     type="text"
                     value={formData.name}
                     onChange={(e) => updateField("name", e.target.value)}
-                    placeholder="홍길동"
+                    placeholder="김서강"
                     className="pl-10"
                     required
                   />
@@ -128,7 +130,7 @@ export default function SignupPage() {
                     type="text"
                     value={formData.studentId}
                     onChange={(e) => updateField("studentId", e.target.value)}
-                    placeholder="2022123456"
+                    placeholder="20221234"
                     className="pl-10"
                     required
                   />
@@ -264,9 +266,42 @@ export default function SignupPage() {
 
           <p className="mt-4 text-xs text-muted-foreground text-center leading-relaxed">
             가입 시{" "}
-            <button className="underline hover:text-foreground">이용약관</button> 및{" "}
-            <button className="underline hover:text-foreground">개인정보처리방침</button>에 동의하는 것으로 간주됩니다.
+            <button className="underline hover:text-foreground" onClick={() => setModal("terms")}>이용약관</button> 및{" "}
+            <button className="underline hover:text-foreground" onClick={() => setModal("privacy")}>개인정보처리방침</button>에 동의하는 것으로 간주됩니다.
           </p>
+
+          {/* 이용약관 / 개인정보처리방침 모달 */}
+          {modal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+              <div className="w-full max-w-sm rounded-lg border border-border bg-background p-6 shadow-lg max-h-[80vh] flex flex-col">
+                <h2 className="text-base font-semibold text-foreground mb-4">
+                  {modal === "terms" ? "이용약관" : "개인정보처리방침"}
+                </h2>
+                <div className="overflow-y-auto flex-1 text-xs text-muted-foreground space-y-3 leading-relaxed">
+                  {modal === "terms" ? (
+                    <>
+                      <p><strong className="text-foreground">1. 서비스 목적</strong><br />서간표는 서강대학교 재학생을 대상으로 수강 이력 관리 및 시간표 구성을 지원하는 서비스입니다.</p>
+                      <p><strong className="text-foreground">2. 이용 대상</strong><br />서강대학교 재학생(@sogang.ac.kr 이메일 보유자)만 가입할 수 있습니다.</p>
+                      <p><strong className="text-foreground">3. 금지 행위</strong><br />타인의 계정 도용, 허위 정보 입력, 서비스 운영 방해 행위를 금지합니다.</p>
+                      <p><strong className="text-foreground">4. 서비스 변경 및 중단</strong><br />운영 사정에 따라 서비스 내용이 변경되거나 중단될 수 있습니다.</p>
+                      <p><strong className="text-foreground">5. 면책</strong><br />서비스 이용 중 발생한 손해에 대해 운영팀은 책임을 지지 않습니다.</p>
+                    </>
+                  ) : (
+                    <>
+                      <p><strong className="text-foreground">1. 수집 항목</strong><br />이름, 학번, 학교 이메일, 수강 이력</p>
+                      <p><strong className="text-foreground">2. 수집 목적</strong><br />회원 식별 및 서비스 제공 (시간표 관리, 강의 추천)</p>
+                      <p><strong className="text-foreground">3. 보유 기간</strong><br />회원 탈퇴 시까지 보유 후 즉시 파기합니다.</p>
+                      <p><strong className="text-foreground">4. 제3자 제공</strong><br />수집된 개인정보는 제3자에게 제공되지 않습니다.</p>
+                      <p><strong className="text-foreground">5. 문의</strong><br />개인정보 관련 문의는 운영팀에 연락해주세요.</p>
+                    </>
+                  )}
+                </div>
+                <Button className="mt-4 h-9" style={{ backgroundColor: "#B0232A" }} onClick={() => setModal(null)}>
+                  확인
+                </Button>
+              </div>
+            </div>
+          )}
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             이미 계정이 있으신가요?{" "}
