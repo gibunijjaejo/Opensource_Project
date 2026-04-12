@@ -20,9 +20,6 @@ pipeline {
 
         // ── 2. CI: 코드 품질 점검 ─────────────────────────────────────
         stage('CI - Lint & Check') {
-            steps {
-                script { env.FAILED_STAGE = 'CI - Lint & Check' }
-            }
             parallel {
 
                 stage('Backend Lint') {
