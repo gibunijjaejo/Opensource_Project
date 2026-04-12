@@ -35,11 +35,12 @@ pipeline {
 
         // ── 2. CI: 코드 품질 점검 (dev 전용) ─────────────────────────
         stage('CI - Lint & Check') {
-            when { expression { return env.BRANCH_SHORT == 'dev' } }
             parallel {
 
                 stage('Backend Lint') {
+                    when { expression { return env.BRANCH_SHORT == 'dev' } }
                     steps {
+                        script { env.FAILED_STAGE = 'Backend Lint' }
                         sh '''
                             python3 -m venv .venv-lint
                             .venv-lint/bin/pip install ruff --quiet
@@ -49,7 +50,9 @@ pipeline {
                 }
 
                 stage('Frontend Build') {
+                    when { expression { return env.BRANCH_SHORT == 'dev' } }
                     steps {
+                        script { env.FAILED_STAGE = 'Frontend Build' }
                         dir('frontend') {
                             sh '''
                                 /usr/bin/npm install --prefix $HOME/.npm-global pnpm@10.32.1 --quiet
