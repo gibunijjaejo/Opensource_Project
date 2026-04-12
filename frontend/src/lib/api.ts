@@ -196,3 +196,12 @@ export const communityApi = {
   toggleLike: (category: string, postId: number) =>
     request<{ liked: boolean; likes: number }>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/like`, { method: "POST" }),
 }
+
+// ── Contact ───────────────────────────────────────────
+export const contactApi = {
+  send: (subject: string, content: string) =>
+    request<{ message: string }>("/api/v1/contact", {
+      method: "POST",
+      body: JSON.stringify({ subject, content }),
+    }),
+}
