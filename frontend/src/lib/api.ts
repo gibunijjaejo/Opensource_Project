@@ -195,6 +195,15 @@ export const communityApi = {
 
   toggleLike: (category: string, postId: number) =>
     request<{ liked: boolean; likes: number }>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/like`, { method: "POST" }),
+
+  updatePost: (category: string, postId: number, data: { title?: string; content?: string }) =>
+    request<Post>(`/api/v1/community/${encodeURIComponent(category)}/${postId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  toggleCommentLike: (category: string, postId: number, commentId: number) =>
+    request<{ liked: boolean; likes: number }>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/comments/${commentId}/like`, { method: "POST" }),
 }
 
 // ── Contact ───────────────────────────────────────────

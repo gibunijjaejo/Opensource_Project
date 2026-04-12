@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_student_id
-from app.models.post import Post, Comment, PostLike
-from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse
+from app.models.post import Post, Comment, PostLike, CommentLike
+from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse, PostUpdate
 
 UPLOAD_DIR = "static/uploads/posts"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -43,6 +43,7 @@ def _to_comment_response(comment: Comment) -> CommentResponse:
         student_id=comment.student_id,
         author_name=comment.author.name if comment.author else None,
         created_at=comment.created_at,
+        likes=len(comment.likes),
     )
 
 
@@ -94,6 +95,28 @@ def get_post(category: str, post_id: int, db: Session = Depends(get_db)):
         **_to_post_response(post).model_dump(),
         comments=[_to_comment_response(c) for c in post.comments],
     )
+
+
+@router.patch("/{category}/{post_id}", response_model=PostResponse)
+def update_post(
+    category: str,
+    post_id: int,
+    req: PostUpdate,
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+):
+    post = db.query(Post).filter(Post.id == post_id, Post.category == category).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    if post.student_id != student_id:
+        raise HTTPException(status_code=403, detail="수정 권한이 없습니다.")
+    if req.title is not None:
+        post.title = req.title
+    if req.content is not None:
+        post.content = req.content
+    db.commit()
+    db.refresh(post)
+    return _to_post_response(post)
 
 
 @router.delete("/{category}/{post_id}", status_code=204)
@@ -156,6 +179,34 @@ def create_comment(
     db.commit()
     db.refresh(comment)
     return _to_comment_response(comment)
+
+
+@router.post("/{category}/{post_id}/comments/{comment_id}/like", response_model=LikeResponse)
+def toggle_comment_like(
+    category: str,
+    post_id: int,
+    comment_id: int,
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+):
+    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.post_id == post_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    existing = db.query(CommentLike).filter(
+        CommentLike.comment_id == comment_id,
+        CommentLike.student_id == student_id,
+    ).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+        db.refresh(comment)
+        return LikeResponse(liked=False, likes=len(comment.likes))
+    else:
+        like = CommentLike(comment_id=comment_id, student_id=student_id)
+        db.add(like)
+        db.commit()
+        db.refresh(comment)
+        return LikeResponse(liked=True, likes=len(comment.likes))
 
 
 @router.delete("/{category}/{post_id}/comments/{comment_id}", status_code=204)

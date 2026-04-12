@@ -14,8 +14,14 @@ class CommentResponse(BaseModel):
     student_id: int
     author_name: Optional[str] = None
     created_at: datetime
+    likes: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class PostUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
 
 
 class PostCreate(BaseModel):

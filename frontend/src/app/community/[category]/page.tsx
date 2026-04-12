@@ -3,7 +3,7 @@
 import { useState, useEffect, use, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, MessageCircle, Trash2, BookOpen, Paperclip, X as XIcon, ThumbsUp } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Trash2, BookOpen, Paperclip, X as XIcon, ThumbsUp, Pencil, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { communityApi } from "@/lib/api"
@@ -36,6 +36,15 @@ export default function CommunityPage({ params }: Props) {
   const [isAnonymous, setIsAnonymous] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 게시글 수정
+  const [isEditing, setIsEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState("")
+  const [editContent, setEditContent] = useState("")
+  const [isEditSaving, setIsEditSaving] = useState(false)
+
+  // 댓글 좋아요
+  const [likedCommentIds, setLikedCommentIds] = useState<Set<number>>(new Set())
 
   // 댓글
   const [commentInput, setCommentInput] = useState("")
@@ -122,6 +131,44 @@ export default function CommunityPage({ params }: Props) {
       comments: prev.comments.filter((c) => c.id !== commentId),
       comment_count: prev.comment_count - 1,
     } : prev)
+  }
+
+  const handleEditStart = () => {
+    if (!selectedPost) return
+    setEditTitle(selectedPost.title)
+    setEditContent(selectedPost.content)
+    setIsEditing(true)
+  }
+
+  const handleEditSave = async () => {
+    if (!selectedPost || !editTitle.trim() || !editContent.trim()) return
+    setIsEditSaving(true)
+    try {
+      const updated = await communityApi.updatePost(decodedCategory, selectedPost.id, {
+        title: editTitle.trim(),
+        content: editContent.trim(),
+      })
+      setSelectedPost((prev) => prev ? { ...prev, title: updated.title, content: updated.content } : prev)
+      setPosts((prev) => prev.map((p) => p.id === updated.id ? { ...p, title: updated.title } : p))
+      setIsEditing(false)
+    } catch {}
+    setIsEditSaving(false)
+  }
+
+  const handleToggleCommentLike = async (commentId: number) => {
+    if (!selectedPost) return
+    try {
+      const res = await communityApi.toggleCommentLike(decodedCategory, selectedPost.id, commentId)
+      setLikedCommentIds((prev) => {
+        const next = new Set(prev)
+        res.liked ? next.add(commentId) : next.delete(commentId)
+        return next
+      })
+      setSelectedPost((prev) => prev ? {
+        ...prev,
+        comments: prev.comments.map((c) => c.id === commentId ? { ...c, likes: res.likes } : c),
+      } : prev)
+    } catch {}
   }
 
   return (
@@ -304,10 +351,42 @@ export default function CommunityPage({ params }: Props) {
             {selectedPost ? (
               <div className="flex flex-col gap-4">
                 <div className="rounded-lg border border-border bg-card p-5">
-                  <h3 className="text-base font-semibold text-foreground mb-1">{selectedPost.title}</h3>
-                  <p className="text-xs text-muted-foreground mb-4">{selectedPost.author_name ?? "익명"} · {new Date(selectedPost.created_at).toLocaleDateString("ko-KR")}</p>
-                  <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
-                  {selectedPost.file_path && (
+                  {isEditing ? (
+                    <div className="flex flex-col gap-3">
+                      <input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      <textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        rows={6}
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setIsEditing(false)}>취소</Button>
+                        <Button size="sm" className="h-7 text-xs gap-1" style={{ backgroundColor: "#B0232A" }} onClick={handleEditSave} disabled={isEditSaving}>
+                          <Check className="h-3 w-3" />
+                          {isEditSaving ? "저장 중..." : "저장"}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="text-base font-semibold text-foreground">{selectedPost.title}</h3>
+                        {myStudentId === selectedPost.student_id && (
+                          <button onClick={handleEditStart} className="text-muted-foreground hover:text-foreground flex-shrink-0 transition-colors">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-4">{selectedPost.author_name ?? "익명"} · {new Date(selectedPost.created_at).toLocaleDateString("ko-KR")}</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{selectedPost.content}</p>
+                    </>
+                  )}
+                  {selectedPost.file_path && !isEditing && (
                     <div className="mt-4 pt-4 border-t border-border">
                       <a
                         href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"}${selectedPost.file_path}`}
@@ -321,20 +400,22 @@ export default function CommunityPage({ params }: Props) {
                     </div>
                   )}
                   {/* 좋아요 버튼 */}
-                  <div className="mt-4 pt-4 border-t border-border">
-                    <button
-                      onClick={() => handleToggleLike(selectedPost.id)}
-                      className={`flex items-center gap-1.5 text-sm font-medium transition-colors rounded-full px-3 py-1.5 border ${
-                        likedIds.has(selectedPost.id)
-                          ? "text-white border-transparent"
-                          : "border-border text-muted-foreground hover:text-foreground"
-                      }`}
-                      style={likedIds.has(selectedPost.id) ? { backgroundColor: "#B0232A" } : {}}
-                    >
-                      <ThumbsUp className="h-3.5 w-3.5" />
-                      {selectedPost.likes}
-                    </button>
-                  </div>
+                  {!isEditing && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <button
+                        onClick={() => handleToggleLike(selectedPost.id)}
+                        className={`flex items-center gap-1.5 text-sm font-medium transition-colors rounded-full px-3 py-1.5 border ${
+                          likedIds.has(selectedPost.id)
+                            ? "text-white border-transparent"
+                            : "border-border text-muted-foreground hover:text-foreground"
+                        }`}
+                        style={likedIds.has(selectedPost.id) ? { backgroundColor: "#B0232A" } : {}}
+                      >
+                        <ThumbsUp className="h-3.5 w-3.5" />
+                        {selectedPost.likes}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* 댓글 */}
@@ -343,20 +424,36 @@ export default function CommunityPage({ params }: Props) {
                     댓글 {selectedPost.comment_count}개
                   </h4>
                   {selectedPost.comments.map((comment) => (
-                    <div key={comment.id} className="flex items-start justify-between gap-2 rounded-md border border-border bg-card p-3">
-                      <div className="flex flex-col gap-1">
-                        <p className="text-xs font-medium text-foreground">{comment.author_name ?? "익명"}</p>
-                        <p className="text-sm text-foreground">{comment.content}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(comment.created_at).toLocaleDateString("ko-KR")}</p>
+                    <div key={comment.id} className="rounded-md border border-border bg-card p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col gap-1">
+                          <p className="text-xs font-medium text-foreground">{comment.author_name ?? "익명"}</p>
+                          <p className="text-sm text-foreground">{comment.content}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(comment.created_at).toLocaleDateString("ko-KR")}</p>
+                        </div>
+                        {myStudentId === comment.student_id && (
+                          <button
+                            onClick={() => handleDeleteComment(comment.id)}
+                            className="text-muted-foreground hover:text-red-500 flex-shrink-0"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
-                      {myStudentId === comment.student_id && (
+                      <div className="mt-2 pt-2 border-t border-border flex items-center">
                         <button
-                          onClick={() => handleDeleteComment(comment.id)}
-                          className="text-muted-foreground hover:text-red-500 flex-shrink-0"
+                          onClick={() => handleToggleCommentLike(comment.id)}
+                          className={`flex items-center gap-1 text-xs font-medium transition-colors rounded-full px-2 py-1 border ${
+                            likedCommentIds.has(comment.id)
+                              ? "text-white border-transparent"
+                              : "border-border text-muted-foreground hover:text-foreground"
+                          }`}
+                          style={likedCommentIds.has(comment.id) ? { backgroundColor: "#B0232A" } : {}}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <ThumbsUp className="h-3 w-3" />
+                          {comment.likes}
                         </button>
-                      )}
+                      </div>
                     </div>
                   ))}
 

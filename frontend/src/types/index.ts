@@ -113,6 +113,7 @@ export interface Comment {
   student_id: number
   author_name: string | null
   created_at: string
+  likes: number
 }
 
 export interface PostDetail extends Post {
