@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from "react"
 import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
-import { ArrowLeft, User, Save, Check, X } from "lucide-react"
+import { ArrowLeft, User, Save, Check, X, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { interestOptions } from "@/lib/constants/course-data"
-import { usersApi } from "@/lib/api"
+import { usersApi, contactApi } from "@/lib/api"
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState({
@@ -17,12 +17,17 @@ export default function ProfilePage() {
     semester: 1,
     interests: [] as string[],
   })
-  const [semesterInput, setSemesterInput] = useState("")
-  const [semesterError, setSemesterError] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const isLoaded = useRef(false)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 문의하기 모달
+  const [showContact, setShowContact] = useState(false)
+  const [contactSubject, setContactSubject] = useState("")
+  const [contactContent, setContactContent] = useState("")
+  const [contactSending, setContactSending] = useState(false)
+  const [contactDone, setContactDone] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem("access_token")
@@ -32,7 +37,6 @@ export default function ProfilePage() {
         const sem = u.current_semester || 1
         const interests = u.interests ? u.interests.split(",").filter(Boolean) : []
         setProfile((prev) => ({ ...prev, name: u.name, studentId: String(u.student_id), semester: sem, interests }))
-        setSemesterInput(`${sem}학기`)
         isLoaded.current = true
       })
       .catch(() => {})
@@ -47,20 +51,6 @@ export default function ProfilePage() {
     }, 500)
   }, [profile.interests])
 
-  const handleSemesterChange = (value: string) => {
-    setSemesterInput(value)
-    setSaved(false)
-    const trimmed = value.trim().replace(/학기$/, "")
-    const num = Number(trimmed)
-    if (!trimmed || isNaN(num) || !Number.isInteger(num) || num < 1) {
-      setSemesterError("입력이 잘못되었습니다")
-    } else {
-      setSemesterError("")
-      setSemesterInput(`${num}학기`)
-      setProfile((prev) => ({ ...prev, semester: num }))
-    }
-  }
-
   const toggleInterest = (interest: string) => {
     setProfile((prev) => ({
       ...prev,
@@ -71,14 +61,31 @@ export default function ProfilePage() {
   }
 
   const handleSave = async () => {
-    if (semesterError) return
     setIsSaving(true)
     try {
-      await usersApi.update({ current_semester: profile.semester, interests: profile.interests })
+      await usersApi.update({ interests: profile.interests })
       setSaved(true)
     } catch {
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleContactSubmit = async () => {
+    if (!contactSubject.trim() || !contactContent.trim()) return
+    setContactSending(true)
+    try {
+      await contactApi.send(contactSubject.trim(), contactContent.trim())
+      setContactDone(true)
+      setTimeout(() => {
+        setShowContact(false)
+        setContactSubject("")
+        setContactContent("")
+        setContactDone(false)
+      }, 2000)
+    } catch {
+    } finally {
+      setContactSending(false)
     }
   }
 
@@ -134,14 +141,26 @@ export default function ProfilePage() {
 
           {/* 기본 정보 */}
           <section className="rounded-lg border border-border bg-card p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                <User className="h-5 w-5 text-muted-foreground" />
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                  <User className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">기본 정보</h2>
+                  <p className="text-xs text-muted-foreground">학적 정보는 수정할 수 없습니다</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">기본 정보</h2>
-                <p className="text-xs text-muted-foreground">학적 정보는 수정할 수 없습니다</p>
-              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 text-xs"
+                style={{ color: "#B0232A", borderColor: "#B0232A" }}
+                onClick={() => setShowContact(true)}
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                문의하기
+              </Button>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -159,16 +178,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">현재 학기</label>
-                <Input
-                  value={semesterInput}
-                  onChange={(e) => setSemesterInput(e.target.value)}
-                  onBlur={(e) => handleSemesterChange(e.target.value)}
-                  placeholder="예: 3 또는 3학기"
-                  className={semesterError ? "border-red-500" : ""}
-                />
-                {semesterError && (
-                  <p className="text-xs text-red-500">{semesterError}</p>
-                )}
+                <Input value={`${profile.semester}학기`} disabled className="bg-muted/50" />
               </div>
             </div>
           </section>
@@ -240,6 +250,64 @@ export default function ProfilePage() {
           </p>
         </div>
       </footer>
+
+      {/* 문의하기 모달 */}
+      {showContact && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowContact(false) }}
+        >
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 mx-4 shadow-lg">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold text-foreground">문의하기</h3>
+              <button
+                onClick={() => setShowContact(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {contactDone ? (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <Check className="h-8 w-8" style={{ color: "#B0232A" }} />
+                <p className="text-sm text-foreground font-medium">문의가 접수되었습니다</p>
+                <p className="text-xs text-muted-foreground">빠른 시일 내에 답변 드리겠습니다.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">제목</label>
+                  <Input
+                    value={contactSubject}
+                    onChange={(e) => setContactSubject(e.target.value)}
+                    placeholder="문의 제목을 입력하세요"
+                    className="text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">내용</label>
+                  <textarea
+                    value={contactContent}
+                    onChange={(e) => setContactContent(e.target.value)}
+                    placeholder="문의 내용을 입력하세요"
+                    rows={5}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                  />
+                </div>
+                <Button
+                  onClick={handleContactSubmit}
+                  disabled={contactSending || !contactSubject.trim() || !contactContent.trim()}
+                  className="w-full h-9 text-sm"
+                  style={{ backgroundColor: "#B0232A" }}
+                >
+                  {contactSending ? "전송 중..." : "제출하기"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
