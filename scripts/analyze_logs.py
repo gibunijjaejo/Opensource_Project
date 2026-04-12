@@ -174,6 +174,28 @@ def send_failure_embed(
     return _post_webhook(webhook_url, payload)
 
 
+def get_container_status() -> str:
+    """실행 중인 seoganpyo-* 컨테이너 상태를 동적으로 조회합니다."""
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--filter", "name=seoganpyo", "--format", "{{.Names}}\t{{.Status}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        lines = result.stdout.strip().splitlines()
+        if not lines:
+            return "(실행 중인 컨테이너 없음)"
+        statuses = []
+        for line in lines:
+            parts = line.split("\t", 1)
+            name = parts[0].replace("seoganpyo-", "")
+            status = parts[1] if len(parts) > 1 else "unknown"
+            icon = "🟢" if status.lower().startswith("up") else "🔴"
+            statuses.append(f"{icon} {name}")
+        return " · ".join(statuses)
+    except Exception:
+        return "(컨테이너 상태 조회 실패)"
+
+
 def send_success_embed(
     webhook_url: str,
     build_number: str,
@@ -181,6 +203,7 @@ def send_success_embed(
 ) -> bool:
     """빌드 성공 Discord Embed 카드를 전송합니다."""
     now_kst = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST")
+    container_status = get_container_status()
 
     payload = {
         "username": "Jenkins Bot",
@@ -189,8 +212,8 @@ def send_success_embed(
                 "title": f"✅ 빌드 #{build_number} 배포 성공",
                 "color": COLOR_SUCCESS,
                 "fields": [
-                    {"name": "🌿 브랜치",    "value": branch, "inline": True},
-                    {"name": "🐳 컨테이너", "value": "api · frontend · redis · ocr 정상 기동", "inline": True},
+                    {"name": "🌿 브랜치",    "value": branch,           "inline": True},
+                    {"name": "🐳 컨테이너", "value": container_status,  "inline": True},
                 ],
                 "footer": {"text": f"배포 완료: {now_kst}"},
             }
