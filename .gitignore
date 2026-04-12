@@ -117,3 +117,15 @@ eval_result*.txt
 
 ### 중첩 저장소 ###
 Opensource_Project/
+
+### 테스트 아티팩트 ###
+test-results/
+reports/
+frontend/playwright-report/
+frontend/test-results/
+
+### 루트 Node 파일 (프론트엔드는 frontend/ 에서 관리) ###
+node_modules/
+package.json
+pnpm-lock.yaml
+package-lock.json
