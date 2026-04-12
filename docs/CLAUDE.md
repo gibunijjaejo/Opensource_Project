@@ -20,64 +20,83 @@ Opensource_Project/
 │   ├── dependencies.py           # 공통 의존성 (get_current_student_id - JWT 검증)
 │   ├── api/                      # API 라우터
 │   │   ├── auth.py               # 이메일 인증 / 회원가입 / 로그인
-│   │   ├── upload.py             # 시간표 이미지 업로드 + OCR 처리
 │   │   ├── courses.py            # 강의 목록 조회 / 검색
 │   │   ├── cart.py               # 장바구니 CRUD
-│   │   └── history.py            # 수강이력 CRUD (JWT 인증 필요)
+│   │   ├── history.py            # 수강이력 CRUD (JWT 인증 필요)
+│   │   ├── users.py              # 유저 정보 조회
+│   │   ├── upload.py             # 시간표 이미지 업로드 + OCR 처리
+│   │   ├── syllabus.py           # 강의계획서 요약
+│   │   ├── posts.py              # 커뮤니티 게시판
+│   │   └── admin.py              # 관리자 전용 (크롤링, AI 요약 재생성)
 │   ├── models/                   # SQLAlchemy ORM 모델
 │   │   ├── user.py               # User (학생)
 │   │   ├── course.py             # Course, CourseDetail
 │   │   ├── professor.py          # Professor, ProfessorDetail
-│   │   └── activity.py           # Track, History, Cart
+│   │   ├── activity.py           # Track, History, Cart
+│   │   └── post.py               # Post, Comment, PostLike
 │   ├── schemas/                  # Pydantic 스키마
-│   │   ├── auth.py               # EmailRequest, VerifyRequest
-│   │   ├── user.py               # UserCreate, UserLogin, UserResponse, Token
-│   │   ├── course.py             # CourseResponse
-│   │   ├── cart.py               # CartCreate, CartResponse
-│   │   └── history.py            # HistoryCreate, HistoryResponse, HistoryUpdate
+│   │   ├── auth.py
+│   │   ├── user.py
+│   │   ├── course.py
+│   │   ├── cart.py
+│   │   ├── history.py
+│   │   ├── syllabus.py
+│   │   └── post.py
 │   └── services/                 # 비즈니스 로직
 │       ├── auth_service.py       # Redis OTP 생성/검증
 │       ├── email_service.py      # SMTP 이메일 발송
 │       ├── user_service.py       # 비밀번호 해싱, JWT 발급, 유저 CRUD
 │       ├── history_service.py    # 수강이력 저장/조회/수정/삭제
-│       └── image_service.py      # PaddleOCR 기반 시간표 이미지 처리 + 과목 매칭
+│       ├── image_service.py      # PaddleOCR 기반 시간표 이미지 처리 + 과목 매칭
+│       ├── crawl_service.py      # 교수 상세정보 크롤링 + Ollama AI 요약
+│       └── syllabus_service.py   # 강의계획서 OCR + LLM 요약
 ├── frontend/                     # Next.js 프론트엔드
-│   ├── src/
-│   │   ├── app/                  # Next.js App Router (페이지 라우팅)
-│   │   │   ├── layout.tsx        # 루트 레이아웃
-│   │   │   ├── page.tsx          # 홈 페이지
-│   │   │   ├── login/            # 로그인 페이지
-│   │   │   ├── register/         # 회원가입 페이지
-│   │   │   ├── timetable/        # 시간표 페이지
-│   │   │   └── courses/          # 강의 목록/상세 페이지
-│   │   ├── components/           # 재사용 컴포넌트
-│   │   │   ├── ui/               # 공통 UI 컴포넌트 (Button, Modal 등)
-│   │   │   ├── timetable/        # 시간표 관련 컴포넌트
-│   │   │   └── course/           # 강의 관련 컴포넌트
-│   │   ├── hooks/                # 커스텀 훅
-│   │   ├── lib/                  # 유틸리티 (api 클라이언트 등)
-│   │   │   └── api.ts            # 백엔드 API 호출 함수 모음
-│   │   └── types/                # TypeScript 타입 정의
-│   │       └── index.ts          # 공통 타입 (Course, User, Cart 등)
-│   ├── public/                   # 정적 파일
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── next.config.ts
-├── static/                       # 업로드 이미지 저장소
-├── Dockerfile
-├── docker-compose.yml
+│   └── src/
+│       ├── app/                  # Next.js App Router (페이지 라우팅)
+│       │   ├── layout.tsx        # 루트 레이아웃 (ThemeProvider 포함)
+│       │   ├── page.tsx          # 홈 페이지
+│       │   ├── globals.css       # 전역 스타일 (다크모드 포함)
+│       │   ├── login/            # 로그인 페이지
+│       │   ├── signup/           # 회원가입 페이지
+│       │   ├── course/[id]/      # 강의 상세 페이지
+│       │   ├── timetable/        # 시간표 페이지
+│       │   ├── profile/          # 프로필 페이지
+│       │   ├── graduation/       # 졸업요건 페이지
+│       │   └── community/        # 커뮤니티 게시판
+│       ├── components/           # 재사용 컴포넌트
+│       │   ├── ui/               # shadcn/ui 공통 컴포넌트
+│       │   ├── features/         # 기능 컴포넌트
+│       │   └── layout/           # 레이아웃 (theme-provider, theme-toggle)
+│       ├── hooks/                # 커스텀 훅
+│       ├── lib/                  # 유틸리티
+│       │   ├── api.ts            # 백엔드 API 호출 함수 모음
+│       │   ├── utils.ts
+│       │   └── constants/
+│       └── types/
+│           └── index.ts          # 공통 타입 (Course, User, Cart 등)
+├── ocr-service/                  # PaddleOCR 마이크로서비스
+├── scripts/                      # 배포 스크립트
+│   ├── pre-deploy.sh             # 배포 전 점검
+│   └── post-deploy.sh            # 배포 후 헬스체크
+├── tests/                        # 백엔드 테스트
+├── docs/                         # 프로젝트 문서
+├── Dockerfile                    # 백엔드 (prod)
+├── docker-compose.yml            # 전체 서비스 (prod)
+├── docker-compose.dev.yml        # 로컬 개발용 override
 └── requirements.txt
 ```
 
 ## 개발 규칙
 
 ### 브랜치 전략
+
 - `main`: 배포용 브랜치
 - `dev`: 통합 개발 브랜치 (기능 브랜치는 dev에 머지)
 - `feat/<기능명>`: 기능 개발 브랜치
 - PR은 항상 `dev` 브랜치로 보낼 것
 
 ### 커밋 컨벤션
+
 - `feat:` - 새로운 기능 추가
 - `fix:` - 버그 수정
 - `refactor:` - 코드 리팩토링
@@ -85,78 +104,31 @@ Opensource_Project/
 - `chore:` - 빌드/설정 변경
 
 ### 코드 스타일
+
 - Python: PEP8 준수, 함수/변수명 snake_case, 클래스명 PascalCase
 - TypeScript: 컴포넌트명 PascalCase, 훅/유틸 camelCase
 - API 엔드포인트: `/api/v1/<리소스>` 형태 권장
 - 프론트엔드 API 호출은 `src/lib/api.ts`에 집중 관리
 
-## API 엔드포인트 목록
+## 환경 변수
 
-| Method | Path | 인증 | 설명 |
-|--------|------|------|------|
-| POST | `/auth/send-email` | ✗ | 이메일 인증번호 발송 |
-| POST | `/auth/verify-code` | ✗ | 인증번호 확인 |
-| POST | `/auth/register` | ✗ | 회원가입 |
-| POST | `/auth/login` | ✗ | 로그인 → JWT 발급 |
-| POST | `/upload/course-image` | ✓ | 시간표 이미지 업로드 + OCR |
-| GET | `/api/v1/courses` | ✗ | 강의 목록 조회 (검색/필터) |
-| GET | `/api/v1/courses/{id}` | ✗ | 강의 상세 조회 |
-| GET | `/api/v1/users/{id}/cart` | ✗ | 장바구니 조회 |
-| POST | `/api/v1/users/{id}/cart` | ✗ | 장바구니 추가 |
-| DELETE | `/api/v1/users/{id}/cart/{cart_id}` | ✗ | 장바구니 삭제 |
-| GET | `/history/me` | ✓ | 내 수강이력 조회 |
-| POST | `/history` | ✓ | 수강이력 수동 추가 |
-| PATCH | `/history/{id}` | ✓ | 수강이력 수정 |
-| DELETE | `/history/{id}` | ✓ | 수강이력 삭제 |
+`.env.example`을 복사해서 `.env`로 사용:
 
-인증(✓): `Authorization: Bearer <token>` 헤더 필요
-
-## DB 모델 요약
-
-| 테이블 | 설명 |
-|---|---|
-| `users` | 학생 정보 (학번, 이름, 이메일, 학기, 이수학점 등) |
-| `courses` | 강의 정보 (강의코드, 시간, 학점, 영어강의 여부 등) |
-| `course_details` | 강의 상세 (필요역량, 평가방식, 트랙 등) |
-| `professors` | 교수 정보 |
-| `professor_details` | 교수 상세 (이메일, 연구실 등) |
-| `tracks` | 트랙 정보 |
-| `histories` | 학생 수강 이력 (연도, 학기, 재수강 여부 포함) |
-| `carts` | 학생 시간표 장바구니 |
-
-## 환경 변수 (.env)
-
-```
-DB_USER=
-DB_PASSWORD=
-DB_HOST=
-DB_PORT=5432
-DB_NAME=
-SECRET_KEY=        # JWT 서명 키
+```bash
+cp .env.example .env
 ```
 
-## 주요 기능 (구현 현황)
+## 실행 방법
 
-- [x] 회원가입 / 로그인 (JWT 인증)
-- [x] 이메일 인증 (Redis OTP, 3분 TTL)
-- [x] 시간표 이미지 업로드 (학번_학기.확장자로 저장, static/uploads/{학번}/ 폴더)
-- [x] PaddleOCR 기반 시간표 OCR + 과목 매칭
-- [x] 수강이력 자동 저장 (OCR 결과 기반)
-- [x] 수강이력 CRUD (JWT 인증)
-- [x] 장바구니 CRUD
-- [x] 강의 목록 조회 / 검색 (강의명, 코드, 연도, 학기, 카테고리, 영어강의 필터)
-- [x] DB 모델 구축 (강의, 교수, 수강이력, 장바구니)
-- [ ] 강의 추천 로직
-
-## 이미지 저장 경로
-
+```bash
+make dev     # 로컬 개발 (--reload + HMR + 로컬 PostgreSQL)
+make down    # 컨테이너 종료
+make prod    # VDI 배포 (pre-check → build → post-check)
+make logs    # 전체 로그 스트리밍
+make ps      # 컨테이너 상태 확인
 ```
-static/uploads/{student_id}/{student_id}_{semester}.{ext}
-```
-- 학기당 1개만 허용 (중복 업로드 시 400 반환)
-- Docker 컨테이너 외부에서 접근 시 볼륨 마운트 필요
 
-## 로컬 실행
+### 직접 실행 (Docker 없이)
 
 ```bash
 # 백엔드
@@ -164,16 +136,14 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload        # http://localhost:8000
 
 # 프론트엔드
-cd frontend
-npm install
-npm run dev                          # http://localhost:3000
+cd frontend && pnpm install && pnpm dev   # http://localhost:3000
 ```
 
 ## 주의사항
 
 - `.env` 파일은 커밋하지 않는다.
 - DB 테이블은 `Base.metadata.create_all()`로 자동 생성된다.
-- `professors` 테이블 FK는 `"professors.professor_id"` — `course.py`, `professor.py` 양쪽 모두 복수형으로 통일.
 - 새 모델 추가 시 `app/main.py`의 import에 반드시 포함해야 테이블이 생성된다.
 - `passlib[bcrypt]`는 bcrypt 4.x 이상과 호환되지 않아 `bcrypt==4.0.1`로 고정.
-- PaddleOCR/PaddlepadDle은 설치 시간이 길고 이미지 크기가 큼 — Docker 빌드 시 주의.
+- PaddleOCR은 설치 시간이 길고 이미지 크기가 큼 — Docker 빌드 시 주의.
+- Ollama AI 요약은 `host.docker.internal:11434`로 호스트 Ollama에 접근 (Docker 내부에서).
