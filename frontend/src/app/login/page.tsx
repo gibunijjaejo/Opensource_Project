@@ -35,7 +35,7 @@ export default function LoginPage() {
     try {
       const token = await authApi.login(email, password)
       localStorage.setItem("access_token", token.access_token)
-      router.push("/")
+      window.location.href = "/"
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.")
       setPassword("")

@@ -131,9 +131,9 @@ export default function TimetablePage() {
       <main className="mx-auto max-w-4xl px-4 sm:px-6 py-8">
         <div className="flex flex-col gap-6">
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
-            <h1 className="text-lg font-semibold text-foreground">시간표 업로드</h1>
+            <h1 className="text-lg font-semibold text-foreground">전공 수업 시간표 업로드</h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-              이수한 학기의 시간표를 모두 선택한 후 최종 제출하세요.
+              이수한 학기의 <strong>전공 수업 시간표</strong>를 모두 선택한 후 최종 제출하세요.
             </p>
           </div>
 
@@ -306,7 +306,7 @@ export default function TimetablePage() {
             <ul className="flex flex-col gap-2 text-xs text-muted-foreground">
               <li className="flex items-start gap-2">
                 <FileImage className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#B0232A" }} />
-                <span>에브리타임에서 해당 학기 시간표 전체 화면을 캡처해주세요.</span>
+                <span>에브리타임에서 해당 학기 <strong>전공 수업</strong> 시간표 전체 화면을 캡처해주세요.</span>
               </li>
               <li className="flex items-start gap-2">
                 <BookOpen className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#B0232A" }} />
