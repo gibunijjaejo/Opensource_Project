@@ -20,13 +20,15 @@ pipeline {
                     def branchSlug = env.BRANCH_SHORT.replaceAll('/', '_')
                     def marker = "/var/lib/jenkins/.seoganpyo_last_commit_${branchSlug}"
                     def last   = sh(script: "cat ${marker} 2>/dev/null || echo ''", returnStdout: true).trim()
-                    if (last == commit) {
+                    def isManual = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
+                    if (!isManual && last == commit) {
                         echo "동일 커밋(${commit.take(8)}) — 재빌드 건너뜀"
                         currentBuild.result = 'ABORTED'
                         throw new org.jenkinsci.plugins.workflow.steps.FlowInterruptedException(
                             hudson.model.Result.ABORTED
                         )
                     }
+                    if (isManual) echo "수동 빌드 — 동일 커밋 체크 건너뜀"
                     sh "echo '${commit}' > ${marker}"
                     echo "브랜치: ${env.BRANCH_SHORT} | 커밋: ${commit.take(8)}"
                 }
