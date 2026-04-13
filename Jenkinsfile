@@ -15,8 +15,10 @@ pipeline {
             steps {
                 checkout scm
                 script {
+                    env.BRANCH_SHORT = env.GIT_BRANCH.replaceAll('origin/', '')
                     def commit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                    def marker = "/var/lib/jenkins/.seoganpyo_last_commit"
+                    def branchSlug = env.BRANCH_SHORT.replaceAll('/', '_')
+                    def marker = "/var/lib/jenkins/.seoganpyo_last_commit_${branchSlug}"
                     def last   = sh(script: "cat ${marker} 2>/dev/null || echo ''", returnStdout: true).trim()
                     if (last == commit) {
                         echo "동일 커밋(${commit.take(8)}) — 재빌드 건너뜀"
@@ -26,17 +28,19 @@ pipeline {
                         )
                     }
                     sh "echo '${commit}' > ${marker}"
-                    echo "브랜치: ${env.GIT_BRANCH} | 커밋: ${commit.take(8)}"
+                    echo "브랜치: ${env.BRANCH_SHORT} | 커밋: ${commit.take(8)}"
                 }
             }
         }
 
-        // ── 2. CI: 코드 품질 점검 ─────────────────────────────────────
+        // ── 2. CI: 코드 품질 점검 (dev 전용) ─────────────────────────
         stage('CI - Lint & Check') {
             parallel {
 
                 stage('Backend Lint') {
+                    when { expression { return env.BRANCH_SHORT == 'dev' } }
                     steps {
+                        script { env.FAILED_STAGE = 'Backend Lint' }
                         sh '''
                             python3 -m venv .venv-lint
                             .venv-lint/bin/pip install ruff --quiet
@@ -46,7 +50,9 @@ pipeline {
                 }
 
                 stage('Frontend Build') {
+                    when { expression { return env.BRANCH_SHORT == 'dev' } }
                     steps {
+                        script { env.FAILED_STAGE = 'Frontend Build' }
                         dir('frontend') {
                             sh '''
                                 /usr/bin/npm install --prefix $HOME/.npm-global pnpm@10.32.1 --quiet
@@ -62,8 +68,9 @@ pipeline {
             }
         }
 
-        // ── 3. 테스트 & 커버리지 ─────────────────────────────────────
+        // ── 3. 테스트 & 커버리지 (dev 전용) ─────────────────────────
         stage('Test & Coverage') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
             steps {
                 script { env.FAILED_STAGE = 'Test & Coverage' }
                 sh '''
@@ -93,8 +100,9 @@ pipeline {
             }
         }
 
-        // ── 4. SonarQube 정적 분석 ───────────────────────────────────
+        // ── 4. SonarQube 정적 분석 (dev 전용) ───────────────────────
         stage('SonarQube Analysis') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
             steps {
                 script { env.FAILED_STAGE = 'SonarQube Analysis' }
                 withSonarQubeEnv('sonarqube') {
@@ -107,6 +115,7 @@ pipeline {
         }
 
         stage('Quality Gate') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
             steps {
                 script { env.FAILED_STAGE = 'Quality Gate' }
                 timeout(time: 5, unit: 'MINUTES') {
@@ -115,16 +124,18 @@ pipeline {
             }
         }
 
-        // ── 5. 배포 전 점검 ───────────────────────────────────────────
+        // ── 5. 배포 전 점검 (main 전용) ──────────────────────────────
         stage('Pre-Deploy Check') {
+            when { expression { return env.BRANCH_SHORT == 'main' } }
             steps {
                 script { env.FAILED_STAGE = 'Pre-Deploy Check' }
                 sh 'bash scripts/pre-deploy.sh'
             }
         }
 
-        // ── 6. Docker 빌드 & 배포 ─────────────────────────────────────
+        // ── 6. Docker 빌드 & 배포 (main 전용) ───────────────────────
         stage('Deploy') {
+            when { expression { return env.BRANCH_SHORT == 'main' } }
             steps {
                 script { env.FAILED_STAGE = 'Deploy' }
                 sh '''
@@ -134,8 +145,9 @@ pipeline {
             }
         }
 
-        // ── 7. 배포 후 헬스체크 ───────────────────────────────────────
+        // ── 7. 배포 후 헬스체크 (main 전용) ─────────────────────────
         stage('Post-Deploy Check') {
+            when { expression { return env.BRANCH_SHORT == 'main' } }
             steps {
                 script { env.FAILED_STAGE = 'Post-Deploy Check' }
                 sh 'bash scripts/post-deploy.sh'
@@ -147,31 +159,37 @@ pipeline {
     post {
         success {
             // Discord Embed 카드 (성공)
-            sh '''
-                python3 scripts/analyze_logs.py \
-                  --mode success \
-                  --build-number "${BUILD_NUMBER}" \
-                  --branch "${GIT_BRANCH}" \
-                  --webhook "${DISCORD_WEBHOOK}" \
-                || curl -s -X POST "$DISCORD_WEBHOOK" \
-                     -H "Content-Type: application/json" \
-                     -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"✅ **배포 성공** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH}\\"}"
-            '''
+            script {
+                def cleanBranch = env.BRANCH_SHORT ?: env.GIT_BRANCH.replaceAll('origin/', '')
+                sh """
+                    /var/lib/jenkins/.venv-scripts/bin/python3 scripts/analyze_logs.py \
+                      --mode success \
+                      --build-number "${env.BUILD_NUMBER}" \
+                      --branch "${cleanBranch}" \
+                      --webhook "${env.DISCORD_WEBHOOK}" \
+                    || curl -s -X POST "${env.DISCORD_WEBHOOK}" \
+                         -H "Content-Type: application/json" \
+                         -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"✅ **배포 성공** — 빌드 #${env.BUILD_NUMBER} | ${cleanBranch}\\"}"
+                """
+            }
         }
         failure {
-            // Docker 컨테이너 로그 수집 → Groq AI 분석 → Discord Embed 카드 (실패)
-            sh '''
-                python3 scripts/analyze_logs.py \
-                  --mode failure \
-                  --build-number "${BUILD_NUMBER}" \
-                  --branch "${GIT_BRANCH}" \
-                  --failed-stage "${FAILED_STAGE}" \
-                  --webhook "${DISCORD_WEBHOOK}" \
-                  --containers seoganpyo-api seoganpyo-frontend seoganpyo-ocr \
-                || curl -s -X POST "$DISCORD_WEBHOOK" \
-                     -H "Content-Type: application/json" \
-                     -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"❌ **빌드 실패** — 빌드 #${BUILD_NUMBER} | ${GIT_BRANCH} | 실패 단계: ${FAILED_STAGE}\\"}"
-            '''
+            // Docker 컨테이너 로그 수집 → AI 분석 → Discord Embed 카드 (실패)
+            script {
+                def cleanBranch = env.BRANCH_SHORT ?: env.GIT_BRANCH.replaceAll('origin/', '')
+                sh """
+                    /var/lib/jenkins/.venv-scripts/bin/python3 scripts/analyze_logs.py \
+                      --mode failure \
+                      --build-number "${env.BUILD_NUMBER}" \
+                      --branch "${cleanBranch}" \
+                      --failed-stage "${env.FAILED_STAGE}" \
+                      --webhook "${env.DISCORD_WEBHOOK}" \
+                      --containers seoganpyo-api seoganpyo-frontend seoganpyo-ocr \
+                    || curl -s -X POST "${env.DISCORD_WEBHOOK}" \
+                         -H "Content-Type: application/json" \
+                         -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"❌ **빌드 실패** — 빌드 #${env.BUILD_NUMBER} | ${cleanBranch} | 실패 단계: ${env.FAILED_STAGE}\\"}"
+                """
+            }
         }
     }
 }

@@ -26,6 +26,7 @@ async function request<T>(
   if (!res.ok) {
     if (res.status === 401 && typeof window !== "undefined") {
       localStorage.removeItem("access_token")
+      document.cookie = "access_token=; path=/; max-age=0"
       window.location.href = "/login"
     }
     const body = await res.json().catch(() => ({}))
