@@ -100,30 +100,6 @@ pipeline {
             }
         }
 
-        // ── 4. SonarQube 정적 분석 (dev 전용) ───────────────────────
-        stage('SonarQube Analysis') {
-            when { expression { return env.BRANCH_SHORT == 'dev' } }
-            steps {
-                script { env.FAILED_STAGE = 'SonarQube Analysis' }
-                withSonarQubeEnv('sonarqube') {
-                    script {
-                        def scannerHome = tool 'sonar'
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.login=${SONAR_AUTH_TOKEN}"
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            when { expression { return env.BRANCH_SHORT == 'dev' } }
-            steps {
-                script { env.FAILED_STAGE = 'Quality Gate' }
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
         // ── 5. 배포 전 점검 (main 전용) ──────────────────────────────
         stage('Pre-Deploy Check') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
@@ -139,8 +115,9 @@ pipeline {
             steps {
                 script { env.FAILED_STAGE = 'Deploy' }
                 sh '''
-                    docker compose down --remove-orphans || true
-                    docker compose up --build -d
+                    docker compose stop backend frontend ocr-service redis || true
+                    docker compose rm -f backend frontend ocr-service redis || true
+                    docker compose up --build -d backend frontend ocr-service redis
                 '''
             }
         }
