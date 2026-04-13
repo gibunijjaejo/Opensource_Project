@@ -17,8 +17,9 @@
 
 **CI/CD 흐름:**
 ```
-Push → GitHub Actions (Lint + Test) → Jenkins
-  → SonarQube → Pre-Deploy → Docker Compose → Post-Deploy
+Push → Jenkins
+  dev:  Lint + Test
+  main: Pre-Deploy → Docker Compose → Post-Deploy
   → Discord 알림 (성공/실패)
 ```
 
@@ -65,8 +66,6 @@ main             | Deploy
 |----------|------|------|
 | CI - Lint & Check | Python ruff 오류 또는 프론트 빌드 실패 | 코드 작성자 |
 | Test & Coverage | pytest 테스트 실패 | 코드 작성자 |
-| SonarQube Analysis | 정적 분석 서버 오류 | DevOps |
-| Quality Gate | 코드 품질 기준 미달 | 코드 작성자 |
 | Pre-Deploy Check | .env 누락 또는 Docker 미실행 | DevOps |
 | Deploy | 컨테이너 빌드/실행 실패 | DevOps |
 | Post-Deploy Check | 배포 후 헬스체크 실패 | DevOps |
