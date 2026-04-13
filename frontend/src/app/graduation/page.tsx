@@ -198,7 +198,7 @@ export default function GraduationPage() {
               <span>대시보드</span>
             </Link>
             <span className="text-border text-muted-foreground/40">/</span>
-            <span className="text-xs text-foreground font-medium">이수 현황</span>
+            <span className="text-xs text-foreground font-medium">전공 수업 이수 현황</span>
           </div>
         </div>
       </header>
@@ -207,11 +207,11 @@ export default function GraduationPage() {
         <div className="flex flex-col gap-8">
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
             <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              나의 이수 현황
+              나의 전공 수업 이수 현황
               <GraduationCap className="h-5 w-5" style={{ color: "#B0232A" }} />
             </h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-              지금까지 이수한 과목과 총 학점을 확인하세요.
+              지금까지 이수한 전공 수업 과목과 총 학점을 확인하세요.
             </p>
           </div>
 
