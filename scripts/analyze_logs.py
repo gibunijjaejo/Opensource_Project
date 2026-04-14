@@ -153,14 +153,14 @@ def send_failure_embed(
         "username": "Jenkins Bot",
         "embeds": [
             {
-                "title": f"❌ 빌드 #{build_number} 실패",
+                "title": f"빌드 #{build_number} 실패 — {failed_stage} 단계",
                 "color": COLOR_FAIL,
                 "fields": [
-                    {"name": "📍 브랜치",      "value": branch,                          "inline": True},
-                    {"name": "🚨 실패 단계",    "value": failed_stage,                    "inline": True},
-                    {"name": "📋 에러 로그 미리보기",
+                    {"name": "브랜치",        "value": branch,                          "inline": True},
+                    {"name": "실패 단계",      "value": failed_stage,                    "inline": True},
+                    {"name": "에러 로그 미리보기",
                      "value": f"```\n{_truncate(log_preview, 500)}\n```",               "inline": False},
-                    {"name": "🤖 AI 장애 분석", "value": _truncate(analysis),            "inline": False},
+                    {"name": "AI 장애 분석",   "value": _truncate(analysis),            "inline": False},
                 ],
                 "footer": {"text": f"빌드 시각: {now_kst}"},
             }
@@ -198,19 +198,30 @@ def send_success_embed(
 ) -> bool:
     """빌드 성공 Discord Embed 카드를 전송합니다."""
     now_kst = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST")
-    container_status = get_container_status()
+
+    if branch == "main":
+        title = f"빌드 #{build_number} 배포 완료"
+        footer = f"배포 완료: {now_kst}"
+        container_status = get_container_status()
+        fields = [
+            {"name": "브랜치",    "value": branch,           "inline": True},
+            {"name": "컨테이너",  "value": container_status, "inline": True},
+        ]
+    else:
+        title = f"빌드 #{build_number} CI 통과"
+        footer = f"빌드 시각: {now_kst}"
+        fields = [
+            {"name": "브랜치",  "value": branch, "inline": True},
+        ]
 
     payload = {
         "username": "Jenkins Bot",
         "embeds": [
             {
-                "title": f"✅ 빌드 #{build_number} 배포 성공",
+                "title": title,
                 "color": COLOR_SUCCESS,
-                "fields": [
-                    {"name": "🌿 브랜치",    "value": branch,           "inline": True},
-                    {"name": "🐳 컨테이너", "value": container_status,  "inline": True},
-                ],
-                "footer": {"text": f"배포 완료: {now_kst}"},
+                "fields": fields,
+                "footer": {"text": footer},
             }
         ],
     }

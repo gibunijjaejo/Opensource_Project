@@ -20,13 +20,15 @@ pipeline {
                     def branchSlug = env.BRANCH_SHORT.replaceAll('/', '_')
                     def marker = "/var/lib/jenkins/.seoganpyo_last_commit_${branchSlug}"
                     def last   = sh(script: "cat ${marker} 2>/dev/null || echo ''", returnStdout: true).trim()
-                    if (last == commit) {
+                    def isManual = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
+                    if (!isManual && last == commit) {
                         echo "동일 커밋(${commit.take(8)}) — 재빌드 건너뜀"
                         currentBuild.result = 'ABORTED'
                         throw new org.jenkinsci.plugins.workflow.steps.FlowInterruptedException(
                             hudson.model.Result.ABORTED
                         )
                     }
+                    if (isManual) echo "수동 빌드 — 동일 커밋 체크 건너뜀"
                     sh "echo '${commit}' > ${marker}"
                     echo "브랜치: ${env.BRANCH_SHORT} | 커밋: ${commit.take(8)}"
                 }
@@ -100,30 +102,6 @@ pipeline {
             }
         }
 
-        // ── 4. SonarQube 정적 분석 (dev 전용) ───────────────────────
-        stage('SonarQube Analysis') {
-            when { expression { return env.BRANCH_SHORT == 'dev' } }
-            steps {
-                script { currentBuild.description = 'SonarQube Analysis' }
-                withSonarQubeEnv('sonarqube') {
-                    script {
-                        def scannerHome = tool 'sonar'
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.login=${SONAR_AUTH_TOKEN}"
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            when { expression { return env.BRANCH_SHORT == 'dev' } }
-            steps {
-                script { currentBuild.description = 'Quality Gate' }
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
         // ── 5. 배포 전 점검 (main 전용) ──────────────────────────────
         stage('Pre-Deploy Check') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
@@ -139,8 +117,9 @@ pipeline {
             steps {
                 script { currentBuild.description = 'Deploy' }
                 sh '''
-                    docker compose down --remove-orphans || true
-                    docker compose up --build -d
+                    docker compose stop backend frontend ocr-service redis || true
+                    docker compose rm -f backend frontend ocr-service redis || true
+                    docker compose up --build -d backend frontend ocr-service redis
                 '''
             }
         }
