@@ -2,7 +2,6 @@ import hashlib
 import json
 import os
 
-from groq import Groq
 from fastapi import HTTPException
 from pypdf import PdfReader
 from io import BytesIO
@@ -44,7 +43,47 @@ def extract_pdf_text(file_bytes: bytes) -> str:
     return "\n".join(pages).strip()
 
 
+def _parse_json_response(raw: str) -> dict:
+    """AI 응답에서 JSON 추출 (마크다운 코드블록 제거 포함)"""
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=502, detail=f"AI 응답을 파싱할 수 없습니다: {raw[:200]}")
+
+
+def summarize_with_claude(text: str) -> dict:
+    try:
+        import anyio
+        from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
+    except ImportError:
+        raise HTTPException(status_code=500, detail="claude-agent-sdk 미설치 — pip install claude-agent-sdk")
+
+    prompt = f"{SYSTEM_PROMPT}\n\n강의계획서:\n\n{text[:8000]}"
+
+    async def _run() -> str:
+        async for message in query(
+            prompt=prompt,
+            options=ClaudeAgentOptions(max_turns=1),
+        ):
+            if isinstance(message, ResultMessage):
+                return message.result
+        return ""
+
+    raw = anyio.run(_run)
+    return _parse_json_response(raw)
+
+
 def summarize_with_groq(text: str) -> dict:
+    try:
+        from groq import Groq
+    except ImportError:
+        raise HTTPException(status_code=500, detail="groq 미설치 — pip install groq")
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="GROQ_API_KEY가 설정되지 않았습니다")
@@ -57,15 +96,7 @@ def summarize_with_groq(text: str) -> dict:
         model="llama-3.3-70b-versatile",
     )
     raw = chat_completion.choices[0].message.content.strip()
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=502, detail=f"AI 응답을 파싱할 수 없습니다: {raw[:200]}")
+    return _parse_json_response(raw)
 
 
 def process_syllabus(db: Session, file_bytes: bytes) -> tuple:
@@ -83,7 +114,7 @@ def process_syllabus(db: Session, file_bytes: bytes) -> tuple:
     if not raw_text:
         raise HTTPException(status_code=400, detail="PDF에서 텍스트를 추출할 수 없습니다")
 
-    result = summarize_with_groq(raw_text)
+    result = summarize_with_claude(raw_text)
 
     course_code = result.get("course_code")
     year = result.get("year")
