@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 
 from fastapi import HTTPException
 from pypdf import PdfReader
@@ -44,7 +43,6 @@ def extract_pdf_text(file_bytes: bytes) -> str:
 
 
 def _parse_json_response(raw: str) -> dict:
-    """AI 응답에서 JSON 추출 (마크다운 코드블록 제거 포함)"""
     raw = raw.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -76,26 +74,6 @@ def summarize_with_claude(text: str) -> dict:
         return ""
 
     raw = anyio.run(_run)
-    return _parse_json_response(raw)
-
-
-def summarize_with_groq(text: str) -> dict:
-    try:
-        from groq import Groq
-    except ImportError:
-        raise HTTPException(status_code=500, detail="groq 미설치 — pip install groq")
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GROQ_API_KEY가 설정되지 않았습니다")
-    client = Groq(api_key=api_key)
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"강의계획서:\n\n{text[:8000]}"},
-        ],
-        model="llama-3.3-70b-versatile",
-    )
-    raw = chat_completion.choices[0].message.content.strip()
     return _parse_json_response(raw)
 
 
