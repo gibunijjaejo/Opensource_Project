@@ -26,12 +26,12 @@ if (!DB_USER || !DB_PASSWORD || !DB_HOST || !DB_PORT || !DB_NAME) {
 
 const url = `postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 
-const child = spawn('npx', ['-y', '@modelcontextprotocol/server-postgres', url], {
+// Windows는 'npx.cmd', Unix/Mac은 'npx'
+const isWindows = process.platform === 'win32';
+const npx = isWindows ? 'npx.cmd' : 'npx';
+
+const child = spawn(npx, ['-y', '@modelcontextprotocol/server-postgres', url], {
   stdio: 'inherit',
-  env: {
-    ...process.env,
-    PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ''}`,
-  },
 });
 
 child.on('exit', code => process.exit(code ?? 0));
