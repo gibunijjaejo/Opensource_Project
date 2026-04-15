@@ -4,7 +4,7 @@
 사용법:
   python scripts/summarize_syllabi.py --year 2026 --semester 1
 
-data/syllabi/ 폴더의 모든 PDF를 읽어 Groq AI로 요약하고
+data/syllabi/ 폴더의 모든 PDF를 읽어 Claude AI로 요약하고
 course_details 테이블에 저장합니다. 파일명 형식 제약 없음.
 """
 
@@ -30,7 +30,7 @@ from app.models.professor import Professor  # noqa: F401 — relationship 해소
 from app.models.activity import Track       # noqa: F401 — relationship 해소용
 from app.models.user import User            # noqa: F401 — relationship 해소용
 from app.models.post import Post            # noqa: F401 — relationship 해소용
-from app.services.syllabus_service import extract_pdf_text, summarize_with_groq
+from app.services.syllabus_service import extract_pdf_text, summarize_with_claude
 
 
 def process_pdf(db: Session, pdf_path: Path, year: int, semester: int) -> str:
@@ -51,11 +51,11 @@ def process_pdf(db: Session, pdf_path: Path, year: int, semester: int) -> str:
     if not raw_text.strip():
         return "error:PDF에서 텍스트를 추출할 수 없습니다"
 
-    # Groq AI 요약
+    # Claude AI 요약
     try:
-        result = summarize_with_groq(raw_text)
+        result = summarize_with_claude(raw_text)
     except Exception as e:
-        return f"error:Groq API 오류 - {e}"
+        return f"error:Claude API 오류 - {e}"
 
     raw_code = result.get("course_code")
     if not raw_code:
