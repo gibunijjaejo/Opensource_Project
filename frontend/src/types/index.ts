@@ -15,6 +15,7 @@ export interface CourseDetail {
   required_skills: string | null
   evaluation_method: string | null
   teaching_method: string | null
+  track_id: number | null
   keyword: string | null
   overview: string | null
   pdf_hash: string | null
