@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft, GraduationCap, CheckCircle2, BookOpen, Clock,
-  Loader2, Plus, Pencil, Trash2, X, Search, RotateCcw,
+  Loader2, Plus, Pencil, Trash2, X, Search, RotateCcw, ArrowUpDown,
 } from "lucide-react"
 import { historyApi, coursesApi } from "@/lib/api"
 import type { HistoryItem, Course } from "@/types"
@@ -47,6 +47,9 @@ export default function GraduationPage() {
 
   // ── 삭제 확인 상태 ─────────────────────────────────────
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+
+  // ── 정렬 방향 (기본: 내림차순) ─────────────────────────
+  const [sortDesc, setSortDesc] = useState(true)
 
   // ── 초기 로드 + OCR 폴링 ───────────────────────────────
   useEffect(() => {
@@ -169,10 +172,10 @@ export default function GraduationPage() {
     (a: SemesterGroup, b: SemesterGroup) => {
       if (a.year === null) return 1
       if (b.year === null) return -1
-      if (a.year !== b.year) return a.year - b.year
+      if (a.year !== b.year) return sortDesc ? b.year - a.year : a.year - b.year
       if (a.semester === null) return 1
       if (b.semester === null) return -1
-      return a.semester - b.semester
+      return sortDesc ? b.semester - a.semester : a.semester - b.semester
     }
   )
 
@@ -255,7 +258,16 @@ export default function GraduationPage() {
 
           {/* History List */}
           <section>
-            <h2 className="text-base font-semibold text-foreground mb-4 px-1">상세 이수 내역</h2>
+            <div className="flex items-center justify-between mb-4 px-1">
+              <h2 className="text-base font-semibold text-foreground">상세 이수 내역</h2>
+              <button
+                onClick={() => setSortDesc((v) => !v)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded px-2.5 py-1 hover:bg-muted transition-colors"
+              >
+                <ArrowUpDown className="h-3 w-3" />
+                {sortDesc ? "최신순" : "오래된순"}
+              </button>
+            </div>
             {isLoading ? (
               <div className="rounded-lg border border-border bg-card py-20 text-center text-sm text-muted-foreground">
                 로딩 중...
@@ -275,7 +287,7 @@ export default function GraduationPage() {
                     <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/40">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-foreground">
-                          {idx + 1}학기
+                          {sortDesc ? semesterGroups.length - idx : idx + 1}학기
                         </span>
                         {group.year && group.semester && (
                           <span className="text-xs text-muted-foreground">
