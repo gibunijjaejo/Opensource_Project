@@ -24,7 +24,7 @@ async function request<T>(
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
   if (!res.ok) {
-    if (res.status === 401 && typeof window !== "undefined") {
+    if (res.status === 401 && typeof window !== "undefined" && path !== "/auth/login") {
       localStorage.removeItem("access_token")
       document.cookie = "access_token=; path=/; max-age=0"
       window.location.href = "/login"
