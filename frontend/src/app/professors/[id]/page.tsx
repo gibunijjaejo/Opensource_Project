@@ -94,22 +94,26 @@ export default function ProfessorDetailPage({ params }: Props) {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/professors"
+        <div className="mx-auto max-w-3xl px-4 sm:px-6">
+          <div className="flex h-14 items-center relative">
+            <button
+              onClick={() => router.back()}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              교수 프로필
+              <span>이전</span>
+            </button>
+            <Link
+              href="/"
+              className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+            >
+              <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
             </Link>
-            <span className="text-muted-foreground/30">|</span>
-            <Link href="/" className="flex items-center gap-1.5">
-              <BookOpen className="h-4 w-4" style={{ color: "#B0232A" }} />
-              <span className="text-sm font-semibold text-foreground">서간표</span>
-            </Link>
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
           </div>
-          <ThemeToggle />
         </div>
       </header>
 
@@ -132,13 +136,13 @@ export default function ProfessorDetailPage({ params }: Props) {
         ) : !professor ? (
           <div className="text-center py-16">
             <p className="text-sm text-muted-foreground">교수를 찾을 수 없습니다.</p>
-            <Link
-              href="/professors"
+            <button
+              onClick={() => router.back()}
               className="mt-2 inline-flex items-center gap-1 text-xs hover:underline"
               style={{ color: "#B0232A" }}
             >
-              <ArrowLeft className="h-3 w-3" /> 교수 프로필로 돌아가기
-            </Link>
+              <ArrowLeft className="h-3 w-3" /> 이전으로 돌아가기
+            </button>
           </div>
         ) : (
           <div className="rounded-md border border-border bg-card p-5">
