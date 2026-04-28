@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Upload, CheckCircle, GraduationCap, FileImage, BookOpen, X, Pencil, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 
 const START_YEAR = 2020
 const SEMESTERS = [1, 2] as const
@@ -129,6 +130,9 @@ export default function TimetablePage() {
               <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
               <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
             </Link>
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>
@@ -179,7 +183,7 @@ export default function TimetablePage() {
                 <div key={key} className="flex flex-col gap-2">
                   <div className="flex justify-center">
                     <span
-                      className="px-6 py-1.5 rounded text-sm font-medium text-foreground"
+                      className="px-6 py-1.5 rounded text-sm font-medium text-white"
                       style={{ backgroundColor: "#B0232A" }}
                     >
                       {semester}학기

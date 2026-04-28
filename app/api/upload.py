@@ -10,10 +10,8 @@ from app.database import SessionLocal
 from app.dependencies import get_current_student_id
 from app.services.history_service import save_histories
 from app.services.image_service import (
-    build_course_candidates,
-    extract_text_blocks,
+    extract_structured_ocr,
     match_courses_to_db,
-    merge_nearby_blocks,
 )
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
@@ -26,11 +24,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def _process_and_save(file_path: str, student_id: int, year: int, semester: int):
     """백그라운드: OCR 처리 후 수강이력 저장. 연도·학기는 사용자 입력값을 사용."""
-    # 1단계: OCR + 텍스트 처리 (DB 세션 불필요, 시간이 오래 걸림)
+    # 1단계: OCR (DB 세션 불필요, 시간이 오래 걸림)
     try:
-        raw_blocks = extract_text_blocks(file_path)
-        merged_blocks = merge_nearby_blocks(raw_blocks)
-        candidates = build_course_candidates(raw_blocks, merged_blocks)
+        candidates, _, _ = extract_structured_ocr(file_path)
     except Exception as e:
         logger.error("OCR 처리 실패 [%s]: %s", file_path, e, exc_info=True)
         return

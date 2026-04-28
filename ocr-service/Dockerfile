@@ -1,4 +1,4 @@
-FROM python:3.11-bookworm
+FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -6,16 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# apt-get 없이 설치 가능한 이유:
-#   python:3.11-bookworm = buildpack-deps 기반 → gcc 포함 → libgomp1 내장
-#   opencv-python-headless = libGL.so.1 불필요 (headless 빌드)
-#
-# paddleocr이 의존성으로 opencv-python(libGL 필요)을 설치하므로
-# pip install 후 opencv-python-headless 로 교체
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip uninstall -y opencv-python \
-    && pip install --no-cache-dir "opencv-python-headless==4.10.0.84"
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
 

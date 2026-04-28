@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { communityApi } from "@/lib/api"
 import type { Post, PostDetail } from "@/types"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 
 type SortMode = "recent" | "popular"
 
@@ -190,15 +191,18 @@ export default function CommunityPage({ params }: Props) {
               <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
               <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
             </Link>
-            <Button
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
-              style={{ backgroundColor: "#B0232A" }}
-              onClick={() => { setShowForm(true); setSelectedPost(null) }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              글쓰기
-            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                style={{ backgroundColor: "#B0232A" }}
+                onClick={() => { setShowForm(true); setSelectedPost(null) }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                글쓰기
+              </Button>
+            </div>
           </div>
         </div>
       </header>

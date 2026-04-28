@@ -201,18 +201,19 @@ def is_course_line_like(text: str) -> bool:
     return True
 
 
-def extract_text_blocks(image_path: str) -> List[Dict[str, Any]]:
-    """OCR 마이크로서비스를 호출해 이미지에서 텍스트 블록을 추출합니다."""
+def extract_structured_ocr(image_path: str) -> Tuple[List[str], Optional[int], Optional[int]]:
+    """OCR 서비스를 호출해 (course_names, year, semester)를 반환합니다."""
     ocr_service_url = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8000")
     try:
         with open(image_path, "rb") as f:
             response = httpx.post(
                 f"{ocr_service_url}/ocr",
                 files={"file": f},
-                timeout=120.0,
+                timeout=60.0,
             )
         response.raise_for_status()
-        return response.json()["blocks"]
+        data = response.json()
+        return data.get("course_names", []), data.get("year"), data.get("semester")
     except httpx.TimeoutException:
         logger.error("OCR 서비스 타임아웃: %s", image_path)
         raise
