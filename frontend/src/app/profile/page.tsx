@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef } from "react"
 import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
-import { ArrowLeft, User, Save, Check, X, MessageSquare } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ArrowLeft, BookOpen, User, Save, Check, X, MessageSquare } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { interestOptions } from "@/lib/constants/course-data"
 import { usersApi, contactApi } from "@/lib/api"
 
 export default function ProfilePage() {
+  const router = useRouter()
   const [profile, setProfile] = useState({
     name: "",
     studentId: "",
@@ -93,23 +95,26 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <div className="flex h-14 items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/"
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>대시보드</span>
-              </Link>
-              <span className="text-border text-muted-foreground/40">/</span>
-              <span className="text-xs text-foreground font-medium">프로필 설정</span>
-            </div>
+          <div className="flex h-14 items-center relative">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>이전</span>
+            </button>
+            <Link
+              href="/"
+              className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+            >
+              <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
+            </Link>
             <Button
               onClick={handleSave}
               disabled={isSaving}
               size="sm"
-              className="h-8 gap-1.5"
+              className="ml-auto h-8 gap-1.5"
               style={{ backgroundColor: "#B0232A" }}
             >
               {saved ? (

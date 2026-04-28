@@ -1,9 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { BookOpen, Mail, Lock, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +11,7 @@ import { authApi } from "@/lib/api"
 type ResetStep = "idle" | "email" | "code" | "done"
 
 export default function LoginPage() {
-  const router = useRouter()
+  const errorRef = useRef<HTMLParagraphElement>(null)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -36,10 +35,10 @@ export default function LoginPage() {
       const token = await authApi.login(email, password)
       localStorage.setItem("access_token", token.access_token)
       document.cookie = `access_token=${token.access_token}; path=/; SameSite=Strict; max-age=${60 * 60 * 24}`
-      window.location.href = "/"
+      window.location.replace("/")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "로그인에 실패했습니다.")
-      setPassword("")
+      setTimeout(() => errorRef.current?.focus(), 100)
     } finally {
       setIsLoading(false)
     }
@@ -121,6 +120,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="student@sogang.ac.kr"
                   className="pl-10"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -149,6 +149,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호 입력"
                   className="pl-10 pr-10"
+                  autoComplete="current-password"
                   required
                 />
                 <button
@@ -162,7 +163,7 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <p className="text-xs text-red-500 text-center">{error}</p>
+              <p ref={errorRef} tabIndex={-1} className="text-xs text-red-500 text-center outline-none">{error}</p>
             )}
 
             <Button

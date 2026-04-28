@@ -114,16 +114,21 @@ export default function TimetablePage() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <div className="flex h-14 items-center gap-3">
-            <Link
-              href="/"
+          <div className="flex h-14 items-center relative">
+            <button
+              onClick={() => router.back()}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>대시보드</span>
+              <span>이전</span>
+            </button>
+            <Link
+              href="/"
+              className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+            >
+              <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
             </Link>
-            <span className="text-border text-muted-foreground/40">/</span>
-            <span className="text-xs text-foreground font-medium">시간표 인식</span>
           </div>
         </div>
       </header>

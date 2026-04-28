@@ -198,18 +198,21 @@ export default function CourseDetailPage({ params }: Props) {
             {/* ── 상단 네비게이션 헤더 ────────────────────────────────────────── */}
             <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
                 <div className="mx-auto max-w-3xl px-4 sm:px-6">
-                    <div className="flex h-14 items-center gap-3">
-                        <Link
-                            href="/"
+                    <div className="flex h-14 items-center relative">
+                        <button
+                            onClick={() => router.back()}
                             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <ArrowLeft className="h-3.5 w-3.5" />
-                            <span>대시보드</span>
+                            <span>이전</span>
+                        </button>
+                        <Link
+                            href="/"
+                            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+                        >
+                            <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
+                            <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
                         </Link>
-                        <span className="text-border text-muted-foreground/40">/</span>
-                        <span className="text-xs text-muted-foreground font-mono">
-                            {course?.course_code ?? id}
-                        </span>
                         <div className="ml-auto">
                             <ThemeToggle />
                         </div>
@@ -232,13 +235,13 @@ export default function CourseDetailPage({ params }: Props) {
                         <p className="text-sm text-muted-foreground">
                             과목을 찾을 수 없습니다.
                         </p>
-                        <Link
-                            href="/"
+                        <button
+                            onClick={() => router.back()}
                             className="mt-2 inline-flex items-center gap-1 text-xs hover:underline"
                             style={{ color: "#B0232A" }}
                         >
-                            <ArrowLeft className="h-3 w-3" /> 대시보드로 돌아가기
-                        </Link>
+                            <ArrowLeft className="h-3 w-3" /> 이전으로 돌아가기
+                        </button>
                     </div>
                 ) : (
                     // 과목 상세
