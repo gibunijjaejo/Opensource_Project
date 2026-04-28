@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.models.user import User
 
@@ -41,6 +42,19 @@ def get_user_by_id(db: Session, student_id: int) -> User | None:
 def update_password(db: Session, email: str, new_password: str) -> None:
     user = get_user_by_email(db, email)
     user.password = hash_password(new_password)
+    db.commit()
+
+
+def delete_user(db: Session, student_id: int) -> None:
+    db.execute(text("ALTER TABLE posts ALTER COLUMN student_id DROP NOT NULL"))
+    db.execute(text("ALTER TABLE comments ALTER COLUMN student_id DROP NOT NULL"))
+    db.execute(text("UPDATE posts SET student_id = NULL WHERE student_id = :sid"), {"sid": student_id})
+    db.execute(text("UPDATE comments SET student_id = NULL WHERE student_id = :sid"), {"sid": student_id})
+    db.execute(text("DELETE FROM post_likes WHERE student_id = :sid"), {"sid": student_id})
+    db.execute(text("DELETE FROM comment_likes WHERE student_id = :sid"), {"sid": student_id})
+    db.execute(text("DELETE FROM histories WHERE student_id = :sid"), {"sid": student_id})
+    db.execute(text("DELETE FROM carts WHERE student_id = :sid"), {"sid": student_id})
+    db.execute(text("DELETE FROM users WHERE student_id = :sid"), {"sid": student_id})
     db.commit()
 
 
