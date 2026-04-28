@@ -32,11 +32,6 @@ export interface SyllabusSummary {
   cached: boolean
 }
 
-export interface Professor {
-  professor_id: number
-  name: string
-}
-
 export interface ProfessorDetail {
   email: string | null
   specialty: string | null

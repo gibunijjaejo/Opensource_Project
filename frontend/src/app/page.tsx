@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut } from "lucide-react"
+import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
 import type { Course } from "@/lib/constants/course-data"
@@ -160,7 +160,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
             <Link
               href="/profile"
               className="group rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow"
@@ -206,6 +206,20 @@ export default function DashboardPage() {
                 {histories.reduce((sum, h) => sum + (h.course?.credits ?? 0), 0)}학점 이수
               </p>
               <p className="mt-1 text-xs text-muted-foreground">졸업 요건 확인</p>
+            </Link>
+            <Link
+              href="/professors"
+              className="group rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" style={{ color: "#B0232A" }} />
+                  <span className="text-xs font-medium text-muted-foreground">교수님</span>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+              </div>
+              <p className="text-sm font-medium text-foreground">프로필 보러가기</p>
+              <p className="mt-1 text-xs text-muted-foreground">연구 분야 탐색</p>
             </Link>
           </div>
 

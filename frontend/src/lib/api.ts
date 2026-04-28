@@ -1,4 +1,4 @@
-import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary, Post, PostDetail, Comment } from "@/types"
+import { Course, CartItem, Token, User, HistoryItem, SyllabusSummary, Post, PostDetail, Comment, Professor } from "@/types"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
@@ -214,4 +214,17 @@ export const contactApi = {
       method: "POST",
       body: JSON.stringify({ subject, content }),
     }),
+}
+
+// ── Professors ────────────────────────────────────────
+export const professorsApi = {
+  list: (params?: { q?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.q) qs.set("q", params.q)
+    const query = qs.toString() ? `?${qs}` : ""
+    return request<Professor[]>(`/api/v1/professors${query}`)
+  },
+
+  get: (professorId: number) =>
+    request<Professor>(`/api/v1/professors/${professorId}`),
 }
