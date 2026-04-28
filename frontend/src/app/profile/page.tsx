@@ -24,6 +24,30 @@ export default function ProfilePage() {
   const isLoaded = useRef(false)
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // 회원탈퇴 모달
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [deleteReason, setDeleteReason] = useState("")
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true)
+    try {
+      await usersApi.deleteMe()
+      localStorage.removeItem("access_token")
+      document.cookie = "access_token=; path=/; max-age=0"
+      window.location.replace("/login")
+    } catch {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteConfirm(false)
+    setDeleteConfirmText("")
+    setDeleteReason("")
+  }
+
   // 문의하기 모달
   const [showContact, setShowContact] = useState(false)
   const [contactSubject, setContactSubject] = useState("")
@@ -226,6 +250,22 @@ export default function ProfilePage() {
             )}
           </section>
 
+          {/* 회원탈퇴 */}
+          <section className="rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-950/20 p-6">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-red-600 dark:text-red-400">회원탈퇴</h2>
+              <p className="text-xs text-muted-foreground mt-1">탈퇴 후 계정 정보는 복구되지 않습니다. 작성한 게시글과 댓글은 삭제되지 않습니다.</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs border-red-300 text-red-500 hover:bg-red-50 hover:text-red-600 dark:border-red-800 dark:hover:bg-red-950"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              회원탈퇴 신청
+            </Button>
+          </section>
+
           {/* 커뮤니티 바로가기 */}
           {profile.interests.length > 0 && (
             <section className="rounded-lg border border-border bg-muted/30 p-6">
@@ -255,6 +295,62 @@ export default function ProfilePage() {
           </p>
         </div>
       </footer>
+
+      {/* 회원탈퇴 확인 모달 */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 mx-4 shadow-lg">
+            <h3 className="text-sm font-semibold text-foreground mb-1">회원탈퇴</h3>
+            <p className="text-xs text-muted-foreground mb-5">탈퇴 후 계정 정보는 복구되지 않습니다.</p>
+
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-foreground">
+                  아래 문구를 그대로 입력하세요
+                </label>
+                <p className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-950/30 rounded px-3 py-2 select-none">
+                  서간표 회원 탈퇴
+                </p>
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="서간표 회원 탈퇴"
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-foreground">탈퇴 사유</label>
+                <textarea
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="탈퇴 사유를 입력해주세요"
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <Button
+                variant="outline"
+                className="flex-1 h-9 text-sm"
+                onClick={handleCloseDeleteModal}
+                disabled={isDeleting}
+              >
+                취소
+              </Button>
+              <Button
+                className="flex-1 h-9 text-sm bg-red-500 hover:bg-red-600"
+                onClick={handleDeleteAccount}
+                disabled={isDeleting || deleteConfirmText !== "서간표 회원 탈퇴" || !deleteReason.trim()}
+              >
+                {isDeleting ? "탈퇴 중..." : "탈퇴하기"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 문의하기 모달 */}
       {showContact && (

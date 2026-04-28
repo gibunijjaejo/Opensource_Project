@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_student_id
@@ -37,3 +37,15 @@ def update_me(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.delete("/me", status_code=204)
+def delete_me(
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+):
+    user = user_service.get_user_by_id(db, student_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    user_service.delete_user(db, student_id)
+    return Response(status_code=204)

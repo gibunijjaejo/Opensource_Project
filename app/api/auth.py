@@ -72,8 +72,10 @@ def register(req: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=Token)
 def login(req: UserLogin, db: Session = Depends(get_db)):
     user = user_service.get_user_by_email(db, req.email)
-    if not user or not user_service.verify_password(req.password, user.password):
-        raise HTTPException(status_code=401, detail="이메일 또는 비밀번호가 올바르지 않습니다.")
+    if not user:
+        raise HTTPException(status_code=404, detail="가입된 이메일이 없습니다.")
+    if not user_service.verify_password(req.password, user.password):
+        raise HTTPException(status_code=401, detail="비밀번호가 틀렸습니다.")
     token = user_service.create_access_token(user.student_id)
     return {"access_token": token, "token_type": "bearer"}
 
