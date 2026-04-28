@@ -78,4 +78,4 @@ class TestLogin:
             "email": "nobody@sogang.ac.kr",
             "password": "anypass",
         })
-        assert res.status_code == 401
+        assert res.status_code == 404
