@@ -250,22 +250,6 @@ export default function ProfilePage() {
             )}
           </section>
 
-          {/* 회원탈퇴 */}
-          <section className="rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-950/20 p-6">
-            <div className="mb-4">
-              <h2 className="text-sm font-semibold text-red-600 dark:text-red-400">회원탈퇴</h2>
-              <p className="text-xs text-muted-foreground mt-1">탈퇴 후 계정 정보는 복구되지 않습니다. 작성한 게시글과 댓글은 삭제되지 않습니다.</p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs border-red-300 text-red-500 hover:bg-red-50 hover:text-red-600 dark:border-red-800 dark:hover:bg-red-950"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              회원탈퇴 신청
-            </Button>
-          </section>
-
           {/* 커뮤니티 바로가기 */}
           {profile.interests.length > 0 && (
             <section className="rounded-lg border border-border bg-muted/30 p-6">
@@ -285,6 +269,22 @@ export default function ProfilePage() {
               </div>
             </section>
           )}
+
+          {/* 회원탈퇴 */}
+          <section className="rounded-lg border border-red-200 bg-red-50/50 dark:border-red-900/40 dark:bg-red-950/20 p-6">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-red-600 dark:text-red-400">회원탈퇴</h2>
+              <p className="text-xs text-muted-foreground mt-1">탈퇴 후 계정 정보는 복구되지 않습니다. 작성한 게시글과 댓글은 삭제되지 않습니다.</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs border-red-300 text-red-500 hover:bg-red-50 hover:text-red-600 dark:border-red-800 dark:hover:bg-red-950"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              회원탈퇴 신청
+            </Button>
+          </section>
         </div>
       </main>
 

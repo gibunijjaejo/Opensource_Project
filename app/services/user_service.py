@@ -39,6 +39,10 @@ def get_user_by_id(db: Session, student_id: int) -> User | None:
     return db.query(User).filter(User.student_id == student_id).first()
 
 
+def get_user_by_approval_token(db: Session, token: str) -> User | None:
+    return db.query(User).filter(User.approval_token == token).first()
+
+
 def update_password(db: Session, email: str, new_password: str) -> None:
     user = get_user_by_email(db, email)
     user.password = hash_password(new_password)

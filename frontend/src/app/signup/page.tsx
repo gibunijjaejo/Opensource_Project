@@ -3,17 +3,15 @@
 import { useState } from "react"
 import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { BookOpen, Mail, Lock, User, Eye, EyeOff, GraduationCap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { authApi } from "@/lib/api"
 
-type Step = "form" | "verify"
+type Step = "form" | "verify" | "pending"
 type ModalType = "terms" | "privacy" | null
 
 export default function SignupPage() {
-  const router = useRouter()
   const [step, setStep] = useState<Step>("form")
   const [modal, setModal] = useState<ModalType>(null)
   const [formData, setFormData] = useState({
@@ -66,7 +64,7 @@ export default function SignupPage() {
         password: formData.password,
         current_semester: formData.currentSemester ? Number(formData.currentSemester) : undefined,
       })
-      router.push("/login")
+      setStep("pending")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "회원가입에 실패했습니다.")
     } finally {
@@ -93,12 +91,14 @@ export default function SignupPage() {
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <h1 className="text-xl font-semibold text-foreground">
-              {step === "form" ? "회원가입" : "이메일 인증"}
+              {step === "form" ? "회원가입" : step === "verify" ? "이메일 인증" : "가입 신청 완료"}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {step === "form"
                 ? "서간표에 가입하고 수강 계획을 시작하세요"
-                : `${formData.email}로 발송된 인증번호를 입력하세요`}
+                : step === "verify"
+                ? `${formData.email}로 발송된 인증번호를 입력하세요`
+                : "관리자 승인 후 로그인할 수 있습니다"}
             </p>
           </div>
 
@@ -262,6 +262,31 @@ export default function SignupPage() {
                 이메일 다시 입력하기
               </button>
             </form>
+          )}
+
+          {/* Step 3: 승인 대기 */}
+          {step === "pending" && (
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ backgroundColor: "#FEF2F2" }}>
+                <svg className="w-8 h-8" style={{ color: "#B0232A" }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">회원가입 신청이 완료되었습니다.</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  관리자가 가입을 승인하면 로그인하실 수 있습니다.<br />
+                  승인까지 다소 시간이 걸릴 수 있습니다.
+                </p>
+              </div>
+              <Link
+                href="/login"
+                className="mt-2 text-sm font-medium hover:underline"
+                style={{ color: "#B0232A" }}
+              >
+                로그인 페이지로 이동
+              </Link>
+            </div>
           )}
 
           <p className="mt-4 text-xs text-muted-foreground text-center leading-relaxed">
