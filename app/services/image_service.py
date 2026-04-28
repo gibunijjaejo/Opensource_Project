@@ -712,10 +712,7 @@ def process_timetable_image(
     db: Session,
     threshold: float = DEFAULT_MATCH_THRESHOLD,
 ) -> Dict[str, Any]:
-    raw_blocks = extract_text_blocks(image_path)
-    merged_blocks = merge_nearby_blocks(raw_blocks)
-    candidates = build_course_candidates(raw_blocks, merged_blocks)
-    detected_year, detected_semester = extract_year_semester_from_blocks(raw_blocks)
+    candidates, detected_year, detected_semester = extract_structured_ocr(image_path)
     matched_courses, ignored_candidates = match_courses_to_db(
         candidates, db, threshold=threshold, year=detected_year, semester=detected_semester
     )
@@ -725,36 +722,7 @@ def process_timetable_image(
         "detected_year": detected_year,
         "detected_semester": detected_semester,
         "threshold": threshold,
-        "raw_block_count": len(raw_blocks),
-        "merged_block_count": len(merged_blocks),
         "candidate_course_names": candidates,
         "matched_courses": matched_courses,
         "ignored_candidates": ignored_candidates,
-        "raw_blocks": [
-            {
-                "id": block["id"],
-                "text": block["display_text"],
-                "normalized_text": block["normalized_text"],
-                "confidence": block["confidence"],
-                "x_min": block["x_min"],
-                "x_max": block["x_max"],
-                "y_min": block["y_min"],
-                "y_max": block["y_max"],
-            }
-            for block in raw_blocks
-        ],
-        "merged_blocks": [
-            {
-                "text": block["display_text"],
-                "normalized_text": block["normalized_text"],
-                "confidence": block["confidence"],
-                "merged_count": block.get("merged_count", 1),
-                "source_ids": block.get("source_ids", []),
-                "x_min": block["x_min"],
-                "x_max": block["x_max"],
-                "y_min": block["y_min"],
-                "y_max": block["y_max"],
-            }
-            for block in merged_blocks
-        ],
     }
