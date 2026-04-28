@@ -201,18 +201,19 @@ def is_course_line_like(text: str) -> bool:
     return True
 
 
-def extract_text_blocks(image_path: str) -> List[Dict[str, Any]]:
-    """OCR 마이크로서비스를 호출해 이미지에서 텍스트 블록을 추출합니다."""
+def extract_structured_ocr(image_path: str) -> Tuple[List[str], Optional[int], Optional[int]]:
+    """OCR 서비스를 호출해 (course_names, year, semester)를 반환합니다."""
     ocr_service_url = os.getenv("OCR_SERVICE_URL", "http://ocr-service:8000")
     try:
         with open(image_path, "rb") as f:
             response = httpx.post(
                 f"{ocr_service_url}/ocr",
                 files={"file": f},
-                timeout=120.0,
+                timeout=60.0,
             )
         response.raise_for_status()
-        return response.json()["blocks"]
+        data = response.json()
+        return data.get("course_names", []), data.get("year"), data.get("semester")
     except httpx.TimeoutException:
         logger.error("OCR 서비스 타임아웃: %s", image_path)
         raise
@@ -711,10 +712,7 @@ def process_timetable_image(
     db: Session,
     threshold: float = DEFAULT_MATCH_THRESHOLD,
 ) -> Dict[str, Any]:
-    raw_blocks = extract_text_blocks(image_path)
-    merged_blocks = merge_nearby_blocks(raw_blocks)
-    candidates = build_course_candidates(raw_blocks, merged_blocks)
-    detected_year, detected_semester = extract_year_semester_from_blocks(raw_blocks)
+    candidates, detected_year, detected_semester = extract_structured_ocr(image_path)
     matched_courses, ignored_candidates = match_courses_to_db(
         candidates, db, threshold=threshold, year=detected_year, semester=detected_semester
     )
@@ -724,36 +722,7 @@ def process_timetable_image(
         "detected_year": detected_year,
         "detected_semester": detected_semester,
         "threshold": threshold,
-        "raw_block_count": len(raw_blocks),
-        "merged_block_count": len(merged_blocks),
         "candidate_course_names": candidates,
         "matched_courses": matched_courses,
         "ignored_candidates": ignored_candidates,
-        "raw_blocks": [
-            {
-                "id": block["id"],
-                "text": block["display_text"],
-                "normalized_text": block["normalized_text"],
-                "confidence": block["confidence"],
-                "x_min": block["x_min"],
-                "x_max": block["x_max"],
-                "y_min": block["y_min"],
-                "y_max": block["y_max"],
-            }
-            for block in raw_blocks
-        ],
-        "merged_blocks": [
-            {
-                "text": block["display_text"],
-                "normalized_text": block["normalized_text"],
-                "confidence": block["confidence"],
-                "merged_count": block.get("merged_count", 1),
-                "source_ids": block.get("source_ids", []),
-                "x_min": block["x_min"],
-                "x_max": block["x_max"],
-                "y_min": block["y_min"],
-                "y_max": block["y_max"],
-            }
-            for block in merged_blocks
-        ],
     }

@@ -8,6 +8,7 @@ import {
   ArrowLeft, GraduationCap, CheckCircle2, BookOpen, Clock,
   Loader2, Plus, Pencil, Trash2, X, Search, RotateCcw, ArrowUpDown,
 } from "lucide-react"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { historyApi, coursesApi } from "@/lib/api"
 import type { HistoryItem, Course } from "@/types"
 
@@ -207,6 +208,9 @@ export default function GraduationPage() {
               <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
               <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
             </Link>
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>
