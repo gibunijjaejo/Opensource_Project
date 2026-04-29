@@ -100,55 +100,75 @@ export default function ProfessorsPage() {
               <Link
                 key={prof.professor_id}
                 href={`/professors/${prof.professor_id}`}
-                className="group relative rounded-lg border border-border bg-card overflow-hidden hover:shadow-md transition-shadow flex flex-col"
+                className="group flex flex-col overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-card hover:shadow-lg transition-shadow"
                 style={{ aspectRatio: "3 / 4" }}
               >
-                {/* 상단 빨간 밴드 + 아바타 */}
+                {/* 상단 헤더 */}
                 <div
-                  className="relative flex-shrink-0"
-                  style={{ height: "55%", backgroundColor: "#B0232A" }}
+                  className="flex flex-shrink-0 items-center gap-1.5 px-2 py-1.5"
+                  style={{ backgroundColor: "#B1000E" }}
                 >
-                  {/* 아바타 (빨간 영역 안에 완전히 포함) */}
+                  <svg width="15" height="17" viewBox="0 0 28 32" fill="none">
+                    <path
+                      d="M14 1L1 6V17C1 24 6.5 30 14 32C21.5 30 27 24 27 17V6L14 1Z"
+                      fill="rgba(255,255,255,0.15)"
+                      stroke="white"
+                      strokeWidth="1.5"
+                    />
+                    <text x="14" y="21" textAnchor="middle" fill="white" fontSize="8.5" fontWeight="bold" fontFamily="Georgia, serif">IHS</text>
+                  </svg>
+                  <div className="flex flex-col leading-none">
+                    <span className="font-bold text-white" style={{ fontSize: 7, letterSpacing: "0.2em" }}>SOGANG</span>
+                    <span className="text-white/80" style={{ fontSize: 5.5, letterSpacing: "0.25em" }}>UNIVERSITY</span>
+                  </div>
+                </div>
+
+                {/* 사진 영역 */}
+                <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-white">
+                  {/* 건물 배경 SVG */}
+                  <svg
+                    className="absolute inset-0 h-full w-full"
+                    viewBox="0 0 120 130"
+                    preserveAspectRatio="xMidYMid slice"
+                    style={{ opacity: 0.07 }}
+                  >
+                    <rect x="25" y="5" width="70" height="125" fill="none" stroke="#B1000E" strokeWidth="2" />
+                    <rect x="35" y="13" width="18" height="24" fill="none" stroke="#B1000E" strokeWidth="1.2" />
+                    <rect x="67" y="13" width="18" height="24" fill="none" stroke="#B1000E" strokeWidth="1.2" />
+                    <rect x="30" y="44" width="60" height="86" fill="none" stroke="#B1000E" strokeWidth="1.2" />
+                    <line x1="60" y1="44" x2="60" y2="130" stroke="#B1000E" strokeWidth="0.8" />
+                    <rect x="38" y="57" width="13" height="16" fill="#B1000E" />
+                    <rect x="69" y="57" width="13" height="16" fill="#B1000E" />
+                    <polygon points="60,0 52,5 68,5" fill="none" stroke="#B1000E" strokeWidth="1.2" />
+                    <line x1="25" y1="44" x2="95" y2="44" stroke="#B1000E" strokeWidth="0.8" />
+                  </svg>
+
+                  {/* 사진 플레이스홀더 */}
                   <div
-                    className="absolute left-1/2 top-1/2 flex aspect-square -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-card shadow-md"
-                    style={{ width: "62%" }}
+                    className="relative z-10 flex items-center justify-center border border-gray-300 bg-gray-100"
+                    style={{ width: "50%", aspectRatio: "3 / 4" }}
                   >
                     <UserCircle
-                      className="text-muted-foreground/80"
-                      style={{ width: "82%", height: "82%" }}
-                      strokeWidth={1.25}
+                      className="text-gray-400"
+                      style={{ width: "76%", height: "76%" }}
+                      strokeWidth={1.2}
                     />
                   </div>
                 </div>
 
-                {/* 하단 흰색 영역 */}
-                <div className="flex flex-1 flex-col px-3 pt-3 pb-2 min-h-0">
-                  {/* 이름 */}
-                  <p className="text-base font-semibold text-foreground truncate text-center">
+                {/* 이름 */}
+                <div className="flex-shrink-0 border-t border-gray-100 bg-white px-2 py-2 text-center dark:border-gray-700 dark:bg-card">
+                  <p className="truncate font-bold text-gray-800 dark:text-foreground" style={{ fontSize: 13, letterSpacing: "0.2em" }}>
                     {prof.name}
                   </p>
-
-                  {/* 빨간 바 + 전공 */}
-                  <div className="mt-2 flex items-stretch gap-1.5 self-center max-w-full">
-                    <span
-                      className="w-0.5 flex-shrink-0 rounded-sm"
-                      style={{ backgroundColor: "#B0232A" }}
-                    />
-                    <p
-                      className="min-w-0 text-sm text-muted-foreground line-clamp-3 leading-snug text-left"
-                      style={{ wordBreak: "keep-all" }}
-                    >
-                      {prof.details?.specialty ?? "세부전공 정보 없음"}
-                    </p>
-                  </div>
-
-                  {/* 브랜드 */}
-                  <p
-                    className="mt-auto text-center text-[10px] font-bold tracking-[0.2em]"
-                    style={{ color: "#B0232A" }}
-                  >
-                    sogang
+                  <p className="mt-0.5 truncate text-gray-400" style={{ fontSize: 9 }}>
+                    {prof.details?.specialty ?? "컴퓨터공학과"}
                   </p>
+                </div>
+
+                {/* 하단 */}
+                <div className="flex-shrink-0 py-1 text-center" style={{ backgroundColor: "#B1000E" }}>
+                  <span className="font-medium text-white" style={{ fontSize: 7, letterSpacing: "0.22em" }}>SOGANG UNIVERSITY</span>
                 </div>
               </Link>
             ))}
