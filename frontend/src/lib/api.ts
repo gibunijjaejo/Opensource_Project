@@ -125,6 +125,9 @@ export const usersApi = {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
+
+  deleteMe: () =>
+    request<void>("/api/v1/users/me", { method: "DELETE" }),
 }
 
 // ── History ───────────────────────────────────────────

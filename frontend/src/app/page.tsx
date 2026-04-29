@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState<string>("")
   const [histories, setHistories] = useState<HistoryItem[]>([])
   const [isLoadingAll, setIsLoadingAll] = useState(false)
+  const [userInterests, setUserInterests] = useState<string[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem("access_token")
@@ -61,7 +62,11 @@ export default function DashboardPage() {
       .finally(() => setIsLoadingAll(false))
 
     usersApi.me()
-      .then((u) => setUserName(u.name))
+      .then((u) => {
+        setUserName(u.name)
+        const interests = u.interests ? u.interests.split(",").filter(Boolean) : []
+        setUserInterests(interests)
+      })
       .catch(() => {})
     cartApi.get()
       .then(setCartItems)
@@ -222,6 +227,36 @@ export default function DashboardPage() {
               <p className="mt-1 text-xs text-muted-foreground">연구 분야 탐색</p>
             </Link>
           </div>
+
+          {/* Community Board Section */}
+          <section className="rounded-lg border border-border bg-muted/30 p-6">
+            <h2 className="text-sm font-semibold text-foreground mb-1">내 커뮤니티 게시판</h2>
+            <p className="text-xs text-muted-foreground mb-4">선택한 분야의 게시판으로 바로 이동할 수 있습니다.</p>
+            {userInterests.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border px-6 py-8 text-center">
+                <p className="text-sm text-muted-foreground">관심 분야를 선택하면 게시판이 표시됩니다.</p>
+                <Link
+                  href="/profile"
+                  className="text-xs text-muted-foreground/70 mt-1 inline-block hover:text-foreground transition-colors"
+                >
+                  프로필에서 설정하기 →
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {userInterests.map((item) => (
+                  <Link
+                    key={item}
+                    href={`/community/${encodeURIComponent(item)}`}
+                    className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+                    style={{ borderColor: "#B0232A", color: "#B0232A" }}
+                  >
+                    {item} →
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
 
           {/* Wishlist Section */}
           <section>

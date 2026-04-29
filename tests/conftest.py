@@ -71,6 +71,7 @@ def test_user(db):
         interests="AI,백엔드",
         major_credits=60,
         total_credits=80,
+        is_approved=True,
     )
     db.add(u)
     db.commit()
@@ -88,6 +89,7 @@ def test_user2(db):
         email="other@sogang.ac.kr",
         password=hash_password("password456"),
         current_semester=3,
+        is_approved=True,
     )
     db.add(u)
     db.commit()
