@@ -79,3 +79,21 @@ class TestLogin:
             "password": "anypass",
         })
         assert res.status_code == 404
+
+    def test_login_pending_approval(self, client, db):
+        from app.models.user import User
+        from app.services.user_service import hash_password
+        pending = User(
+            student_id=20209000,
+            name="대기유저",
+            email="pending@sogang.ac.kr",
+            password=hash_password("pass1234"),
+            is_approved=False,
+        )
+        db.add(pending)
+        db.commit()
+        res = client.post("/auth/login", json={
+            "email": "pending@sogang.ac.kr",
+            "password": "pass1234",
+        })
+        assert res.status_code == 403
