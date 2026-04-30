@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 
 from fastapi import HTTPException
 from pypdf import PdfReader
@@ -7,6 +8,7 @@ from io import BytesIO
 from sqlalchemy.orm import Session
 
 from app.models.course import Course, CourseDetail
+from app.models.professor import Professor
 
 SYSTEM_PROMPT = """당신은 대학 강의 계획서를 분석하는 전문가입니다.
 모든 텍스트 필드(overview, goals, evaluation_method, teaching_method, keyword)는 강의계획서가 영어로 작성되어 있더라도 반드시 한국어로 작성하세요. 단, 프로그래밍 언어·기술 용어 등 전문 용어는 영어 그대로 사용해도 됩니다.
@@ -133,3 +135,180 @@ def process_syllabus(db: Session, file_bytes: bytes) -> tuple:
     db.refresh(detail)
 
     return detail, course, False
+
+
+def process_pdf_for_batch(
+    db: Session,
+    pdf_bytes: bytes,
+    filename: str,
+    year: int,
+    semester: int,
+) -> dict:
+    """
+    배치/관리자용 PDF 처리.
+
+    process_syllabus(단건 업로드용)와 달리:
+    - HTTPException 안 던짐 → 결과를 dict로 반환 (배치 루프에서 한 PDF 실패가 전체를 막지 않음)
+    - 교수명 fuzzy 매칭으로 정확한 분반 식별 (rapidfuzz)
+    - 파일명 기반 fallback (예: 2026-1학기__CSE2003_01.pdf → CSE2003)
+
+    Returns:
+        {
+            "status": "ok" | "skip" | "warn" | "error",
+            "course_ids": [int, ...],   # 저장된 course_id 목록 (skip이면 기존 course_id)
+            "message": str,             # 사람이 읽을 수 있는 사유/세부 정보
+        }
+    """
+    pdf_hash = hashlib.sha256(pdf_bytes).hexdigest()
+
+    # 캐시 확인
+    existing = db.query(CourseDetail).filter(CourseDetail.pdf_hash == pdf_hash).first()
+    if existing:
+        return {"status": "skip", "course_ids": [existing.course_id], "message": "이미 처리됨"}
+
+    # PDF 텍스트 추출
+    raw_text = extract_pdf_text(pdf_bytes)
+    if not raw_text.strip():
+        return {"status": "error", "course_ids": [], "message": "PDF에서 텍스트를 추출할 수 없습니다"}
+
+    # Claude AI 요약
+    try:
+        result = summarize_with_claude(raw_text)
+    except Exception as e:
+        return {"status": "error", "course_ids": [], "message": f"Claude API 오류 - {e}"}
+
+    raw_code = result.get("course_code")
+    if not raw_code:
+        return {"status": "error", "course_ids": [], "message": "강의 코드를 추출할 수 없습니다"}
+
+    # AI 응답에서 CSE로 시작하는 코드만 추출 (AIE 제외)
+    # CSE+숫자 형식을 우선, CSEG/CSEQ 등은 fallback
+    all_codes = re.findall(r'\bCSE[A-Z]?\d+\b', raw_code)
+    pure_cse = [c for c in all_codes if re.match(r'^CSE\d+$', c)]
+    other_cse = [c for c in all_codes if not re.match(r'^CSE\d+$', c)]
+    candidates = pure_cse + other_cse
+
+    professor_name = result.get("professor_name")
+    courses_to_save: list[Course] = []
+    fuzzy_info = ""
+
+    for code in candidates:
+        base_query = (
+            db.query(Course)
+            .filter(
+                Course.course_code == code,
+                Course.year == year,
+                Course.semester == semester,
+            )
+        )
+
+        # 교수 이름으로 정확한 분반 매칭
+        if professor_name:
+            from rapidfuzz import fuzz
+            pdf_name_clean = professor_name.replace("교수님", "").replace("교수", "").strip()
+            pdf_name_no_space = "".join(pdf_name_clean.split())
+            # PDF 인코딩 오류로 섞인 한글/영문 외 문자(그리스어 등) 제거
+            pdf_name_no_space = re.sub(
+                r'[^가-힣ᄀ-ᇿ㄰-㆏a-zA-Z]',
+                '',
+                pdf_name_no_space,
+            )
+            all_sections = (
+                base_query
+                .join(Professor, Course.professor_id == Professor.professor_id)
+                .all()
+            )
+            # 1차: 완전 일치
+            matched = [
+                c for c in all_sections
+                if "".join((c.professor.name or "").split()) == pdf_name_no_space
+            ]
+            if matched:
+                courses_to_save = matched
+                break
+            # 2차: 퍼지 매칭 (PDF 인코딩 오류로 이름이 일부 깨진 경우 대응)
+            if all_sections:
+                best = max(
+                    all_sections,
+                    key=lambda c: fuzz.ratio(
+                        pdf_name_no_space, "".join((c.professor.name or "").split())
+                    ),
+                )
+                best_score = fuzz.ratio(
+                    pdf_name_no_space, "".join((best.professor.name or "").split())
+                )
+                if best_score >= 60:
+                    fuzzy_info = (
+                        f"퍼지 매칭: '{pdf_name_no_space}' → '{best.professor.name}' "
+                        f"(유사도 {best_score:.0f}%)"
+                    )
+                    courses_to_save = [best]
+                    break
+
+        # 교수 이름 매칭 실패 시
+        if not courses_to_save:
+            all_sections = base_query.all()
+            if len(all_sections) == 1:
+                courses_to_save = all_sections
+                break
+            elif len(all_sections) > 1:
+                professor_ids = {s.professor_id for s in all_sections}
+                if len(professor_ids) == 1:
+                    # 모든 분반 교수가 동일 → 전체 저장
+                    courses_to_save = all_sections
+                    break
+                return {
+                    "status": "warn",
+                    "course_ids": [],
+                    "message": (
+                        f"교수 매칭 실패 - {code} 분반 {len(all_sections)}개 "
+                        f"(교수명: {professor_name})"
+                    ),
+                }
+
+    # AI 추출 실패 시 파일명에서 코드 추출 (예: CSEG109_01.pdf → CSEG109)
+    if not courses_to_save:
+        filename_match = re.match(r'^.*?__([A-Z]+\d+)_\d+\.pdf$', filename)
+        if filename_match:
+            filename_code = filename_match.group(1)
+            courses_to_save = (
+                db.query(Course)
+                .filter(
+                    Course.course_code == filename_code,
+                    Course.year == year,
+                    Course.semester == semester,
+                )
+                .all()
+            )
+
+    if not courses_to_save:
+        return {
+            "status": "error",
+            "course_ids": [],
+            "message": (
+                f"강의 없음 (course_code={raw_code}, year={year}, semester={semester})"
+            ),
+        }
+
+    # course_details upsert — 매칭된 모든 분반에 저장
+    saved_ids: list[int] = []
+    for course in courses_to_save:
+        detail = (
+            db.query(CourseDetail)
+            .filter(CourseDetail.course_id == course.course_id)
+            .first()
+        )
+        if detail is None:
+            detail = CourseDetail(course_id=course.course_id)
+            db.add(detail)
+        detail.overview = result.get("overview")
+        detail.required_skills = result.get("goals")
+        detail.evaluation_method = result.get("evaluation_method")
+        detail.teaching_method = result.get("teaching_method")
+        detail.track_id = result.get("track_id")
+        detail.keyword = result.get("keyword")
+        detail.pdf_hash = pdf_hash
+        saved_ids.append(course.course_id)
+
+    db.commit()
+    return {"status": "ok", "course_ids": saved_ids, "message": fuzzy_info}
