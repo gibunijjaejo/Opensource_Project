@@ -63,6 +63,7 @@ export default function AdminLecturesPage() {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("전체")
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
 
   const token = getAdminToken()
 
@@ -92,6 +93,7 @@ export default function AdminLecturesPage() {
   const runSummarizeAll = async () => {
     setJob({ type: "running", label: `${year}-${semester}학기 강의계획서 요약 생성 중...` })
     setLogs([])
+    setProgress(null)
     try {
       const res = await fetch(`${BASE_URL}/admin/lectures/summarize-all/stream`, {
         method: "POST",
@@ -112,12 +114,14 @@ export default function AdminLecturesPage() {
           if (!line.startsWith("data: ")) continue
           const ev = JSON.parse(line.slice(6))
           if (ev.type === "start") {
-            // 시작 — UI에 total 표시 등 (CP4에서 progress bar 추가 예정)
+            setProgress({ current: 0, total: ev.total })
           } else if (ev.type === "progress") {
             setLogs((prev) => [...prev, { filename: ev.filename, status: "running" }])
           } else if (ev.type === "done") {
+            setProgress({ current: ev.index, total: ev.total })
             setLogs((prev) => prev.map((l) => l.filename === ev.filename ? { ...l, status: "done", message: ev.message } : l))
           } else if (ev.type === "skip") {
+            setProgress({ current: ev.index, total: ev.total })
             setLogs((prev) => {
               const exists = prev.some((l) => l.filename === ev.filename)
               const entry: LogEntry = { filename: ev.filename, status: "skip", message: ev.reason }
@@ -126,8 +130,10 @@ export default function AdminLecturesPage() {
                 : [...prev, entry]
             })
           } else if (ev.type === "warn") {
+            setProgress({ current: ev.index, total: ev.total })
             setLogs((prev) => prev.map((l) => l.filename === ev.filename ? { ...l, status: "warn", message: ev.message } : l))
           } else if (ev.type === "fail") {
+            setProgress({ current: ev.index, total: ev.total })
             setLogs((prev) => prev.map((l) => l.filename === ev.filename ? { ...l, status: "fail", message: ev.message } : l))
           } else if (ev.type === "complete") {
             setJob({
@@ -273,6 +279,26 @@ export default function AdminLecturesPage() {
             <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
             {job.label}
           </div>
+          {progress && progress.total > 0 && (
+            <div className="px-4 py-3 border-b border-border">
+              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
+                <span>진행률</span>
+                <span>
+                  {progress.current} / {progress.total}{" "}
+                  ({Math.round((progress.current / progress.total) * 100)}%)
+                </span>
+              </div>
+              <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{
+                    width: `${(progress.current / progress.total) * 100}%`,
+                    backgroundColor: "#B0232A",
+                  }}
+                />
+              </div>
+            </div>
+          )}
           {logs.length > 0 && (
             <div className="px-4 py-3 space-y-1 max-h-64 overflow-y-auto">
               {logs.map((log, i) => (
