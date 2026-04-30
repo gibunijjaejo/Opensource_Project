@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const PUBLIC_PATHS = ["/login", "/signup"]
+const PUBLIC_PATHS = ["/login", "/signup", "/admin/login"]
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const token = request.cookies.get("access_token")?.value
 
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+    const adminToken = request.cookies.get("admin_token")?.value
+    if (!adminToken) {
+      return NextResponse.redirect(new URL("/admin/login", request.url))
+    }
+    return NextResponse.next()
+  }
+
+  const token = request.cookies.get("access_token")?.value
   const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path))
 
   if (!isPublic && !token) {

@@ -24,7 +24,7 @@ export default function ProfessorsPage() {
     if (!token) { router.replace("/login"); return }
     professorsApi.list()
       .then(setProfessors)
-      .catch(() => {})
+      .catch((err) => console.error("교수 목록 오류:", err))
       .finally(() => setIsLoading(false))
   }, [router])
 
