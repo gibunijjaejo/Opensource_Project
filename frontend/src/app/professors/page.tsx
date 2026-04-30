@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { Suspense, useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, BookOpen, UserCircle, ChevronLeft, ChevronRight } from "lucide-react"
@@ -12,7 +12,16 @@ import type { Professor } from "@/types"
 const CARD_WIDTH = 170
 const SPACING = 148
 
+// Next.js 16: useSearchParams는 반드시 Suspense boundary 안에서 사용해야 빌드 통과
 export default function ProfessorsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <ProfessorsContent />
+    </Suspense>
+  )
+}
+
+function ProfessorsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   // URL ?index=N 으로 carousel 위치 보존 — 상세 페이지에서 router.back() 시 복원용
