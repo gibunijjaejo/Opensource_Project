@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { Suspense, useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, BookOpen, UserCircle, ChevronLeft, ChevronRight } from "lucide-react"
 import { professorsApi } from "@/lib/api"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
@@ -12,11 +12,23 @@ import type { Professor } from "@/types"
 const CARD_WIDTH = 170
 const SPACING = 148
 
+// Next.js 16: useSearchParams는 반드시 Suspense boundary 안에서 사용해야 빌드 통과
 export default function ProfessorsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <ProfessorsContent />
+    </Suspense>
+  )
+}
+
+function ProfessorsContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // URL ?index=N 으로 carousel 위치 보존 — 상세 페이지에서 router.back() 시 복원용
+  const initialIndex = Math.max(0, Number(searchParams.get("index") ?? 0) || 0)
   const [professors, setProfessors] = useState<Professor[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeIndex, setActiveIndex] = useState(0)
+  const [activeIndex, setActiveIndex] = useState(initialIndex)
   const touchStartX = useRef<number | null>(null)
 
   useEffect(() => {
@@ -27,6 +39,27 @@ export default function ProfessorsPage() {
       .catch((err) => console.error("교수 목록 오류:", err))
       .finally(() => setIsLoading(false))
   }, [router])
+
+  // 데이터 로드 후 잘못된 index(범위 초과) 방어
+  useEffect(() => {
+    if (professors.length > 0 && activeIndex >= professors.length) {
+      setActiveIndex(0)
+    }
+  }, [professors.length, activeIndex])
+
+  // activeIndex 변경 시마다 URL 동기화 (history entry는 추가 안 함)
+  // → 상세 페이지로 push 직후 router.back() 시 carousel 위치 그대로 복원됨
+  useEffect(() => {
+    if (typeof window === "undefined" || professors.length === 0) return
+    const currentParam = new URLSearchParams(window.location.search).get("index")
+    if (currentParam !== String(activeIndex)) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `/professors?index=${activeIndex}`,
+      )
+    }
+  }, [activeIndex, professors.length])
 
   const prev = () => setActiveIndex((i) => Math.max(0, i - 1))
   const next = () => setActiveIndex((i) => Math.min(professors.length - 1, i + 1))
