@@ -6,6 +6,7 @@ import { Loader2, CheckCircle, XCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL || "http://localhost:3001"
 
 function getAdminToken() {
   if (typeof document === "undefined") return null
@@ -62,7 +63,7 @@ export default function AdminMonitoringPage() {
         )}
       </div>
 
-      <div className="grid gap-4 max-w-xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
         {/* API 서버 상태 */}
         <div className="rounded-lg border border-border bg-card p-5">
           <p className="text-xs font-medium text-muted-foreground mb-3">API 서버</p>
@@ -118,13 +119,30 @@ export default function AdminMonitoringPage() {
           )}
         </div>
 
-        {/* Grafana 안내 */}
-        <div className="rounded-lg border border-border bg-muted/30 p-5">
-          <p className="text-xs font-medium text-muted-foreground mb-2">상세 모니터링 (Grafana)</p>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Loki + Prometheus + Grafana 연동 후 이곳에 대시보드를 임베드할 예정입니다.
-          </p>
+      </div>
+
+      {/* Grafana 통합 모니터링 대시보드 (iframe 임베드) */}
+      <div className="mt-8">
+        <p className="text-xs font-medium text-muted-foreground mb-3">상세 모니터링 (Grafana)</p>
+        <div className="rounded-lg border border-border overflow-hidden bg-card">
+          <iframe
+            src={`${GRAFANA_URL}/d/seoganpyo-overview/?orgId=1&kiosk=tv&theme=light&refresh=30s`}
+            title="서간표 통합 모니터링"
+            className="w-full"
+            style={{ height: 900, border: 0 }}
+          />
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Grafana 직접 접속:{" "}
+          <a
+            href={GRAFANA_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground"
+          >
+            {GRAFANA_URL}
+          </a>
+        </p>
       </div>
     </div>
   )
