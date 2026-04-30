@@ -2,6 +2,7 @@ import os
 import json
 import re
 import time
+import unicodedata
 from pathlib import Path
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
@@ -319,14 +320,35 @@ SYLLABI_DIR = Path(
 )
 
 
+def _list_syllabi_files(year: Optional[int], semester: Optional[int], course_code: Optional[str] = None) -> list[Path]:
+    """
+    디렉토리에서 PDF 파일 스캔. macOS NFD vs Linux NFC 정규화 차이를 흡수.
+
+    glob에 한글 패턴을 직접 쓰면 macOS 마운트(NFD) 환경에서 매칭 실패하므로
+    *.pdf로 다 가져온 뒤 파이썬에서 NFC 정규화 후 prefix/code 비교한다.
+    """
+    if not SYLLABI_DIR.exists():
+        return []
+    prefix = f"{year}-{semester}학기__" if year and semester else ""
+    matched: list[Path] = []
+    for f in SYLLABI_DIR.glob("*.pdf"):
+        name_nfc = unicodedata.normalize("NFC", f.name)
+        if prefix and not name_nfc.startswith(prefix):
+            continue
+        if course_code:
+            m = re.match(r'^.*?__([A-Z]+\d+)_\d+\.pdf$', name_nfc)
+            if not m or m.group(1) != course_code:
+                continue
+        matched.append(f)
+    return sorted(matched)
+
+
 def _list_pdf_codes(year: Optional[int], semester: Optional[int]) -> set[str]:
     """디렉토리에서 PDF 파일을 스캔하여 매칭되는 course_code 집합을 반환."""
-    if not SYLLABI_DIR.exists():
-        return set()
-    pattern = f"{year}-{semester}학기__*.pdf" if year and semester else "*.pdf"
     codes: set[str] = set()
-    for f in SYLLABI_DIR.glob(pattern):
-        m = re.match(r'^.*?__([A-Z]+\d+)_\d+\.pdf$', f.name)
+    for f in _list_syllabi_files(year, semester):
+        name_nfc = unicodedata.normalize("NFC", f.name)
+        m = re.match(r'^.*?__([A-Z]+\d+)_\d+\.pdf$', name_nfc)
         if m:
             codes.add(m.group(1))
     return codes
@@ -375,6 +397,35 @@ def get_lectures(
     ]
 
 
+@router.get("/lectures/{course_id}/detail")
+def get_lecture_detail(
+    course_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """admin 페이지에서 행 펼치기 시 호출. 모든 요약 필드 반환."""
+    course = db.query(Course).filter(Course.course_id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="강의를 찾을 수 없습니다.")
+    detail = db.query(CourseDetail).filter(CourseDetail.course_id == course_id).first()
+    return {
+        "course_id": course_id,
+        "course_code": course.course_code,
+        "course_name": course.course_name,
+        "year": course.year,
+        "semester": course.semester,
+        "professor_name": course.professor.name if course.professor else None,
+        "overview": detail.overview if detail else None,
+        "goals": detail.required_skills if detail else None,  # CourseDetail.required_skills
+        "evaluation_method": detail.evaluation_method if detail else None,
+        "teaching_method": detail.teaching_method if detail else None,
+        "track_id": detail.track_id if detail else None,
+        "keyword": detail.keyword if detail else None,
+        "has_summary": bool(detail and detail.overview),
+        "has_pdf_hash": bool(detail and detail.pdf_hash),
+    }
+
+
 @router.post("/lectures/summarize-all/stream")
 def resummarize_lectures_stream(
     body: LectureBatchBody,
@@ -382,8 +433,7 @@ def resummarize_lectures_stream(
     db: Session = Depends(get_db),
 ):
     def generate():
-        prefix = f"{body.year}-{body.semester}학기__"
-        pdf_files = sorted(SYLLABI_DIR.glob(f"{prefix}*.pdf")) if SYLLABI_DIR.exists() else []
+        pdf_files = _list_syllabi_files(body.year, body.semester)
         total = len(pdf_files)
 
         yield f"data: {json.dumps({'type': 'start', 'total': total, 'year': body.year, 'semester': body.semester})}\n\n"
@@ -438,38 +488,35 @@ def resummarize_lecture(
     if not course:
         raise HTTPException(status_code=404, detail="강의를 찾을 수 없습니다.")
 
-    prefix = f"{course.year}-{course.semester}학기__"
-    pdf_files = (
-        sorted(SYLLABI_DIR.glob(f"{prefix}{course.course_code}_*.pdf"))
-        if SYLLABI_DIR.exists()
-        else []
-    )
+    pdf_files = _list_syllabi_files(course.year, course.semester, course.course_code)
     if not pdf_files:
         raise HTTPException(
             status_code=404,
             detail=f"PDF 파일을 찾을 수 없습니다 ({course.course_code}, {course.year}-{course.semester})",
         )
 
-    # force=True: 기존 hash 삭제 후 재처리 (skip 우회)
-    if body.force:
-        detail = db.query(CourseDetail).filter(CourseDetail.course_id == course_id).first()
-        if detail:
-            detail.pdf_hash = None
-            db.commit()
-
-    # course_code 매칭되는 PDF 모두 처리 → 해당 course_id가 담긴 결과 반환
+    # course_code 매칭되는 PDF 모두 처리 → 끝까지 돌리고 매칭된 결과 반환
+    # 같은 course_code의 다른 분반 PDF가 _01에 들어있고 사용자가 클릭한
+    # course_id는 _03에 매칭되는 경우 등을 처리하려면 early return 안 됨.
+    # force=True 시 process_pdf_for_batch가 hash 캐시 우회 (별도 hash clear 불필요).
     all_results = []
+    matched_result: dict | None = None
     for pdf_path in pdf_files:
         pdf_bytes = pdf_path.read_bytes()
-        result = process_pdf_for_batch(db, pdf_bytes, pdf_path.name, course.year, course.semester)
+        result = process_pdf_for_batch(
+            db, pdf_bytes, pdf_path.name, course.year, course.semester,
+            force=body.force,
+        )
         all_results.append({"filename": pdf_path.name, **result})
         if course_id in result.get("course_ids", []):
-            return {
-                "course_id": course_id,
-                "course_code": course.course_code,
-                "result": result,
-            }
+            matched_result = result
 
+    if matched_result:
+        return {
+            "course_id": course_id,
+            "course_code": course.course_code,
+            "result": matched_result,
+        }
     return {
         "course_id": course_id,
         "course_code": course.course_code,

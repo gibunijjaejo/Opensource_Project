@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, RefreshCw, Sparkles, CheckCircle, XCircle, AlertCircle, MinusCircle } from "lucide-react"
+import { Loader2, RefreshCw, Sparkles, CheckCircle, XCircle, AlertCircle, MinusCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -45,6 +45,29 @@ type LogEntry = {
   message?: string
 }
 
+type LectureDetail = {
+  course_id: number
+  course_code: string
+  course_name: string
+  year: number
+  semester: number
+  professor_name: string | null
+  overview: string | null
+  goals: string | null
+  evaluation_method: string | null
+  teaching_method: string | null
+  track_id: number | null
+  keyword: string | null
+  has_summary: boolean
+  has_pdf_hash: boolean
+}
+
+const TRACK_NAMES: Record<number, string> = {
+  1: "데이터분석", 2: "데이터관리", 3: "백엔드", 4: "프론트엔드", 5: "웹/앱",
+  6: "AI", 7: "DevOps", 8: "네트워크", 9: "보안", 10: "QA",
+  11: "게임", 12: "임베디드", 13: "IT컨설팅", 14: "컴퓨터교육",
+}
+
 const SEMESTERS = [
   { year: 2026, semester: 1 },
   { year: 2026, semester: 2 },
@@ -64,6 +87,9 @@ export default function AdminLecturesPage() {
   const [filter, setFilter] = useState("전체")
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [detailMap, setDetailMap] = useState<Record<number, LectureDetail>>({})
+  const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null)
 
   const token = getAdminToken()
 
@@ -149,6 +175,28 @@ export default function AdminLecturesPage() {
     }
   }
 
+  const toggleExpand = async (courseId: number) => {
+    if (expandedId === courseId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(courseId)
+    // 펼칠 때마다 새로 fetch (재요약으로 변경된 내용을 즉시 반영)
+    setDetailLoadingId(courseId)
+    try {
+      const res = await fetch(`${BASE_URL}/admin/lectures/${courseId}/detail`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
+      const data: LectureDetail = await res.json()
+      setDetailMap((prev) => ({ ...prev, [courseId]: data }))
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDetailLoadingId(null)
+    }
+  }
+
   const runSummarizeSingle = async (courseId: number) => {
     setSummaryingId(courseId)
     try {
@@ -159,6 +207,26 @@ export default function AdminLecturesPage() {
       })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       fetchLectures(year, semester)
+      // 펼친 상태면 detail도 다시 로드
+      if (expandedId === courseId) {
+        setDetailMap((prev) => {
+          const next = { ...prev }
+          delete next[courseId]
+          return next
+        })
+        setDetailLoadingId(courseId)
+        try {
+          const detailRes = await fetch(`${BASE_URL}/admin/lectures/${courseId}/detail`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (detailRes.ok) {
+            const data: LectureDetail = await detailRes.json()
+            setDetailMap((prev) => ({ ...prev, [courseId]: data }))
+          }
+        } finally {
+          setDetailLoadingId(null)
+        }
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -359,6 +427,7 @@ export default function AdminLecturesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b border-border">
               <tr>
+                <th className="w-8"></th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">강의코드</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">강의명</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">학기</th>
@@ -369,46 +438,89 @@ export default function AdminLecturesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((l) => (
-                <tr key={l.course_id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs">{l.course_code}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-foreground">{l.course_name}</span>
-                    <span className="ml-1.5 text-xs text-muted-foreground">#{l.course_id}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {l.year}-{l.semester}
-                  </td>
-                  <td className="px-4 py-3 text-xs">{l.professor_name ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    {l.has_pdf
-                      ? <CheckCircle className="h-4 w-4 text-green-500" />
-                      : <XCircle className="h-4 w-4 text-muted-foreground" />}
-                  </td>
-                  <td className="px-4 py-3">
-                    {l.has_summary
-                      ? <CheckCircle className="h-4 w-4 text-green-500" />
-                      : <XCircle className="h-4 w-4 text-muted-foreground" />}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {l.has_pdf && (
-                      <button
-                        onClick={() => runSummarizeSingle(l.course_id)}
-                        disabled={summaryingId === l.course_id || job.type === "running"}
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
-                      >
-                        {summaryingId === l.course_id
-                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          : <Sparkles className="h-3.5 w-3.5" />}
-                        {l.has_summary ? "재요약" : "요약"}
-                      </button>
+              {filtered.map((l) => {
+                const isExpanded = expandedId === l.course_id
+                const detail = detailMap[l.course_id]
+                return (
+                  <Fragment key={l.course_id}>
+                    <tr
+                      key={l.course_id}
+                      className="hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => toggleExpand(l.course_id)}
+                    >
+                      <td className="pl-3 pr-1">
+                        {isExpanded
+                          ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{l.course_code}</td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium text-foreground">{l.course_name}</span>
+                        <span className="ml-1.5 text-xs text-muted-foreground">#{l.course_id}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {l.year}-{l.semester}
+                      </td>
+                      <td className="px-4 py-3 text-xs">{l.professor_name ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        {l.has_pdf
+                          ? <CheckCircle className="h-4 w-4 text-green-500" />
+                          : <XCircle className="h-4 w-4 text-muted-foreground" />}
+                      </td>
+                      <td className="px-4 py-3">
+                        {l.has_summary
+                          ? <CheckCircle className="h-4 w-4 text-green-500" />
+                          : <XCircle className="h-4 w-4 text-muted-foreground" />}
+                      </td>
+                      <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        {l.has_pdf && (
+                          <button
+                            onClick={() => runSummarizeSingle(l.course_id)}
+                            disabled={summaryingId === l.course_id || job.type === "running"}
+                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
+                          >
+                            {summaryingId === l.course_id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Sparkles className="h-3.5 w-3.5" />}
+                            {l.has_summary ? "재요약" : "요약"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${l.course_id}-detail`} className="bg-muted/20">
+                        <td colSpan={8} className="px-6 py-4">
+                          {detailLoadingId === l.course_id && !detail ? (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" /> 불러오는 중...
+                            </div>
+                          ) : detail ? (
+                            <div className="space-y-3 text-xs">
+                              <DetailField label="강의 개요 (overview)" value={detail.overview} />
+                              <DetailField label="목표 (goals)" value={detail.goals} />
+                              <DetailField label="평가 방식" value={detail.evaluation_method} />
+                              <DetailField label="수업 방식" value={detail.teaching_method} />
+                              <DetailField
+                                label="트랙"
+                                value={detail.track_id ? `${detail.track_id}: ${TRACK_NAMES[detail.track_id] ?? "-"}` : null}
+                              />
+                              <DetailField label="키워드" value={detail.keyword} />
+                              <div className="text-muted-foreground pt-1 border-t border-border">
+                                hash 저장: {detail.has_pdf_hash ? "✓" : "✗"}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">데이터를 불러올 수 없습니다.</div>
+                          )}
+                        </td>
+                      </tr>
                     )}
-                  </td>
-                </tr>
-              ))}
+                  </Fragment>
+                )
+              })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     {lectures.length === 0 ? "강의 데이터가 없습니다." : "검색 결과가 없습니다."}
                   </td>
                 </tr>
@@ -417,6 +529,17 @@ export default function AdminLecturesPage() {
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+function DetailField({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div className="grid grid-cols-[120px_1fr] gap-3">
+      <div className="text-muted-foreground font-medium">{label}</div>
+      <div className="text-foreground whitespace-pre-wrap break-words">
+        {value && value.trim() ? value : <span className="text-muted-foreground italic">(없음)</span>}
+      </div>
     </div>
   )
 }
