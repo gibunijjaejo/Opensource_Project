@@ -1,3 +1,4 @@
+import logging
 import os
 
 from fastapi import FastAPI
@@ -7,6 +8,12 @@ from fastapi.staticfiles import StaticFiles
 from app.api import auth, upload, courses, cart, history, users, admin, syllabus, posts, contact, professors
 from app.database import engine, Base
 from app.models import user, course, professor, activity, post, report, notice  # noqa: F401 — Base 테이블 등록용
+
+# Root logger 설정 — Promtail/Loki에서 INFO 이상 로그 수집 가능하도록
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 # 서버 실행 시 DB 테이블 생성
 Base.metadata.create_all(bind=engine)
