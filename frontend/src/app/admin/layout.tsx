@@ -2,13 +2,14 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { BookOpen, LayoutDashboard, Users, Flag, Activity, LogOut } from "lucide-react"
+import { BookOpen, LayoutDashboard, Users, Flag, Activity, GraduationCap, LogOut } from "lucide-react"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 
 const NAV = [
   { href: "/admin", label: "대시보드", icon: LayoutDashboard, exact: true },
   { href: "/admin/users", label: "사용자 관리", icon: Users },
   { href: "/admin/reports", label: "신고 관리", icon: Flag },
+  { href: "/admin/professors", label: "교수 데이터", icon: GraduationCap },
   { href: "/admin/monitoring", label: "모니터링", icon: Activity },
 ]
 
