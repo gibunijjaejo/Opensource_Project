@@ -185,7 +185,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "sum by (level) (count_over_time({compose_project=\"seoganpyo\"} | regexp `(?P<level>INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL)` [1m]))",
+          "expr": "sum by (level) (count_over_time({compose_project=\"seoganpyo\"} | regexp `(?P<level>INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL)` | level != \"\" [1m]))",
           "legendFormat": "{{level}}",
           "queryType": "range",
           "refId": "A"
