@@ -63,7 +63,7 @@ export default function AdminMonitoringPage() {
         )}
       </div>
 
-      <div className="grid gap-4 max-w-xl">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
         {/* API 서버 상태 */}
         <div className="rounded-lg border border-border bg-card p-5">
           <p className="text-xs font-medium text-muted-foreground mb-3">API 서버</p>
