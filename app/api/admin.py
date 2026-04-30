@@ -343,15 +343,19 @@ def _list_syllabi_files(year: Optional[int], semester: Optional[int], course_cod
     return sorted(matched)
 
 
-def _list_pdf_codes(year: Optional[int], semester: Optional[int]) -> set[str]:
-    """디렉토리에서 PDF 파일을 스캔하여 매칭되는 course_code 집합을 반환."""
-    codes: set[str] = set()
+def _list_pdf_section_keys(year: Optional[int], semester: Optional[int]) -> set[tuple[str, int]]:
+    """디렉토리 PDF 파일에서 (course_code, section_num) 쌍을 추출.
+
+    파일명 컨벤션: YYYY-N학기__COURSECODE_##.pdf
+    예: 2026-1학기__CSE2003_03.pdf → ("CSE2003", 3)
+    """
+    keys: set[tuple[str, int]] = set()
     for f in _list_syllabi_files(year, semester):
         name_nfc = unicodedata.normalize("NFC", f.name)
-        m = re.match(r'^.*?__([A-Z]+\d+)_\d+\.pdf$', name_nfc)
+        m = re.match(r'^.*?__([A-Z]+\d+)_(\d+)\.pdf$', name_nfc)
         if m:
-            codes.add(m.group(1))
-    return codes
+            keys.add((m.group(1), int(m.group(2))))
+    return keys
 
 
 class LectureBatchBody(BaseModel):
@@ -379,8 +383,18 @@ def get_lectures(
         query = query.filter(Course.semester == semester)
     courses = query.order_by(Course.course_code, Course.course_id).all()
 
-    pdf_codes = _list_pdf_codes(year, semester)
+    pdf_section_keys = _list_pdf_section_keys(year, semester)
     detail_map = {d.course_id: d for d in db.query(CourseDetail).all()}
+
+    # 분반 인덱스 계산: 같은 course_code 끼리 묶고 course_id 오름차순으로 1-indexed
+    # (PDF 파일명의 _01, _02, _03이 분반 1, 2, 3에 해당한다는 컨벤션과 일치)
+    courses_by_code: dict[str, list[Course]] = {}
+    for c in courses:
+        courses_by_code.setdefault(c.course_code, []).append(c)
+    section_index_map: dict[int, int] = {}
+    for code, sections in courses_by_code.items():
+        for i, s in enumerate(sorted(sections, key=lambda x: x.course_id), 1):
+            section_index_map[s.course_id] = i
 
     return [
         {
@@ -391,7 +405,7 @@ def get_lectures(
             "semester": c.semester,
             "professor_name": c.professor.name if c.professor else None,
             "has_summary": bool(detail_map.get(c.course_id) and detail_map[c.course_id].overview),
-            "has_pdf": c.course_code in pdf_codes,
+            "has_pdf": (c.course_code, section_index_map.get(c.course_id, 0)) in pdf_section_keys,
         }
         for c in courses
     ]
