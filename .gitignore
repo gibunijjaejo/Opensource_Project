@@ -86,6 +86,7 @@ node_modules/
 /dist
 .next/
 out/
+*.tsbuildinfo
 .env.local
 .env.development.local
 .env.test.local
@@ -129,3 +130,4 @@ node_modules/
 package.json
 pnpm-lock.yaml
 package-lock.json
+*.tsbuildinfo
