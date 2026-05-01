@@ -64,7 +64,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "sum by (container) (rate({compose_project=\"seoganpyo\"}[$__interval]))",
+          "expr": "sum by (container) (rate({compose_project=\"opensource_project\"}[$__interval]))",
           "legendFormat": "{{container}}",
           "queryType": "range",
           "refId": "A"
@@ -185,7 +185,7 @@
         {
           "datasource": { "type": "loki", "uid": "loki" },
           "editorMode": "code",
-          "expr": "sum by (level) (count_over_time({compose_project=\"seoganpyo\"} | regexp `(?P<level>INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL)` | level != \"\" [1m]))",
+          "expr": "sum by (level) (count_over_time({compose_project=\"opensource_project\"} | regexp `(?P<level>INFO|WARNING|WARN|ERROR|DEBUG|CRITICAL)` | level != \"\" [1m]))",
           "legendFormat": "{{level}}",
           "queryType": "range",
           "refId": "A"
