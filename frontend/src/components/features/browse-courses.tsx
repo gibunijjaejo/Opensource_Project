@@ -72,8 +72,8 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
         </div>
       </div>
 
-      <div ref={tableRef} className="overflow-hidden rounded-md border border-border max-h-[480px] overflow-y-auto">
-        <table className="w-full text-sm">
+      <div ref={tableRef} className="overflow-hidden rounded-md border border-border">
+        <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="border-b border-border bg-muted/40">
               <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24">
@@ -106,38 +106,44 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
                 return (
                   <tr
                     key={`${course.id}-${i}`}
-                    className={`border-b border-border last:border-0 transition-colors hover:bg-muted/30 ${
+                    className={`h-12 border-b border-border last:border-0 transition-colors hover:bg-muted/30 ${
                       i % 2 === 0 ? "" : "bg-muted/10"
                     }`}
                   >
-                    <td className="px-4 py-3">
-                      <span className="font-mono text-xs font-medium text-muted-foreground tracking-wide">
+                    <td className="px-4 py-0">
+                      <span className="font-mono text-xs font-medium text-muted-foreground tracking-wide whitespace-nowrap">
                         {course.code}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-0.5">
+                    <td className="px-4 py-0 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0">
                         <Link
                           href={`/course/${course.id}`}
-                          className="text-xs font-medium text-foreground hover:underline flex items-center gap-1 w-fit"
+                          className="text-xs font-medium hover:underline flex items-center gap-1 min-w-0"
                           style={{ color: "#B0232A" } as React.CSSProperties}
                         >
-                          {course.name}
+                          <span className="truncate">{course.name}</span>
                           <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
                         </Link>
-                        <span className="sm:hidden text-xs text-muted-foreground">{course.professor}</span>
+                        <span className="sm:hidden text-xs text-muted-foreground truncate flex-shrink-0">
+                          · {course.professor}
+                        </span>
                       </div>
                     </td>
-                    <td className="hidden sm:table-cell px-4 py-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{course.professor}</span>
+                    <td className="hidden sm:table-cell px-4 py-0">
+                      <span className="text-xs text-foreground whitespace-nowrap truncate block">
+                        {course.professor}
+                      </span>
                     </td>
-                    <td className="hidden md:table-cell px-4 py-3">
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{course.schedule}</span>
+                    <td className="hidden md:table-cell px-4 py-0">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap truncate block">
+                        {course.schedule}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-0">
                       <div className="flex items-center justify-end gap-1.5">
                         {inWishlist ? (
-                          <span className="flex items-center gap-1 text-xs font-medium" style={{ color: "#B0232A" }}>
+                          <span className="flex items-center gap-1 text-xs font-medium whitespace-nowrap" style={{ color: "#B0232A" }}>
                             <Check className="h-3 w-3" />
                             추가됨
                           </span>
@@ -146,7 +152,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
                             size="sm"
                             variant="outline"
                             onClick={() => onAdd(course.id)}
-                            className="h-6 px-2 text-xs gap-1 hover:bg-accent"
+                            className="h-6 px-2 text-xs gap-1 hover:bg-accent whitespace-nowrap"
                             style={{ color: "#B0232A", borderColor: "#B0232A" } as React.CSSProperties}
                           >
                             <Plus className="h-3 w-3" />
