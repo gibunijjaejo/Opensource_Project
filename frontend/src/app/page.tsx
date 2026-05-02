@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users } from "lucide-react"
+import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
 import type { Course } from "@/lib/constants/course-data"
@@ -227,6 +227,34 @@ export default function DashboardPage() {
               <p className="mt-1 text-xs text-muted-foreground">연구 분야 탐색</p>
             </Link>
           </div>
+
+          {/* Portfolio (AI 평가) Section */}
+          <Link
+            href="/portfolio"
+            className="group rounded-lg border border-border bg-card p-5 hover:shadow-sm transition-shadow flex items-center gap-4"
+          >
+            <div
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg"
+              style={{ backgroundColor: "rgba(176, 35, 42, 0.1)" }}
+            >
+              <Sparkles className="h-5 w-5" style={{ color: "#B0232A" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground">내 포트폴리오</h2>
+                <span
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(176, 35, 42, 0.1)", color: "#B0232A" }}
+                >
+                  AI 평가
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                교내·교외활동, 자격증, 수상내역, 프로젝트를 기록하고 AI에게 진로 평가를 받으세요.
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+          </Link>
 
           {/* Community Board Section */}
           <section className="rounded-lg border border-border bg-muted/30 p-6">
