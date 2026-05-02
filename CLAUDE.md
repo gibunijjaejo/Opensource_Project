@@ -29,13 +29,15 @@ Opensource_Project/
 │   │   ├── upload.py             # 시간표 이미지 업로드 + OCR 처리
 │   │   ├── syllabus.py           # 강의계획서 요약
 │   │   ├── posts.py              # 커뮤니티 게시판
+│   │   ├── portfolio.py          # 포트폴리오 CRUD
 │   │   └── admin.py              # 관리자 전용 (크롤링, AI 요약 재생성)
 │   ├── models/                   # SQLAlchemy ORM 모델
 │   │   ├── user.py               # User (학생)
 │   │   ├── course.py             # Course, CourseDetail
 │   │   ├── professor.py          # Professor, ProfessorDetail
 │   │   ├── activity.py           # Track, History, Cart
-│   │   └── post.py               # Post, Comment, PostLike
+│   │   ├── post.py               # Post, Comment, PostLike
+│   │   └── portfolio.py          # Portfolio
 │   ├── schemas/                  # Pydantic 스키마
 │   └── services/                 # 비즈니스 로직
 │       ├── auth_service.py       # Redis OTP 생성/검증
@@ -128,6 +130,38 @@ Opensource_Project/
 - DB 컬럼: `snake_case`
 - 환경 변수: `UPPER_SNAKE_CASE`
 - Docker 컨테이너: `seoganpyo-<서비스명>` (예: `seoganpyo-api`, `seoganpyo-grafana`)
+
+## PR 리뷰 기준
+
+Claude가 PR을 리뷰할 때 아래 기준으로 CRITICAL / MAJOR / MINOR 분류해서 코멘트할 것.
+
+### CRITICAL (머지 전 반드시 수정)
+
+- `get_current_student_id` / `get_current_admin` 의존성 없이 인증 필요한 엔드포인트 노출
+- 학생 A가 학생 B의 장바구니·수강이력·포트폴리오를 조회/수정 가능한 로직
+- `.env` 값 (DB 비밀번호, JWT_SECRET, API 키 등) 코드에 하드코딩
+- 새 SQLAlchemy 모델을 `app/main.py`에 import하지 않아 테이블이 생성되지 않는 경우
+- PostgreSQL 전용 타입(`JSONB` 등) 사용으로 테스트(SQLite) 깨짐
+
+### MAJOR (강하게 수정 권고)
+
+- 장바구니·수강이력 중복 추가 방지 로직 누락
+- 새 API 라우터를 `app/main.py`에 `include_router` 하지 않음
+- 프론트엔드 API 호출을 `src/lib/api.ts` 외부에서 직접 `fetch` 처리
+- TypeScript `any` 타입 사용 — `src/types/index.ts`에 타입 정의 후 교체
+- Pydantic 스키마 없이 raw dict를 응답으로 반환
+- 새 패키지 추가 시 `requirements.txt` 누락
+
+### MINOR (권고)
+
+- Python snake_case / TypeScript PascalCase·camelCase 네이밍 규칙 위반
+- 불필요한 `console.log`, `print` 잔존
+- API 엔드포인트가 `/api/v1/<리소스>` 형태를 따르지 않음
+- 서비스 로직이 라우터에 직접 작성됨 (비즈니스 로직은 `services/`에)
+
+## 리뷰 요청 방법
+
+> "PR diff 확인하고 CLAUDE.md 기준으로 리뷰해줘"
 
 ## 환경 변수
 
