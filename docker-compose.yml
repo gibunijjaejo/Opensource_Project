@@ -31,7 +31,9 @@ services:
 
     # FastAPI 백엔드
     backend:
-        build: .
+        build:
+            context: .
+            dockerfile: Dockerfile
         container_name: seoganpyo-api
         restart: always
         ports:
@@ -87,4 +89,3 @@ services:
             timeout: 10s
             retries: 3
             start_period: 30s
-

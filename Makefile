@@ -1,26 +1,42 @@
+COMPOSE     = docker-compose.yml
+COMPOSE_DEV = docker-compose.dev.yml
+COMPOSE_OBS = docker-compose.observability.yml
+
+DC_DEV  = docker compose -f $(COMPOSE) -f $(COMPOSE_DEV)
+DC_PROD = docker compose -f $(COMPOSE)
+DC_OBS  = docker compose -f $(COMPOSE) -f $(COMPOSE_DEV) -f $(COMPOSE_OBS)
+
+# ── 로컬 개발 ─────────────────────────────────────────
 dev:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+	$(DC_DEV) up --build
 
 down:
-	docker compose down
-
-prod:
-	bash scripts/pre-deploy.sh
-	docker compose up --build -d
-	bash scripts/post-deploy.sh
+	$(DC_DEV) down
 
 logs:
-	docker compose logs -f
+	$(DC_DEV) logs -f
 
 ps:
-	docker compose ps
+	$(DC_DEV) ps
 
-# ── 관측 스택 (Loki + Promtail + Grafana) — 옵트인
+# ── 프로덕션 배포 ──────────────────────────────────────
+prod:
+	bash scripts/pre-deploy.sh
+	$(DC_PROD) up --build -d
+	bash scripts/post-deploy.sh
+
+prod-down:
+	$(DC_PROD) down
+
+prod-logs:
+	$(DC_PROD) logs -f
+
+# ── 관측 스택 (Loki + Promtail + Grafana) — 옵트인 ────
 up-obs:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.observability.yml up -d --build
+	$(DC_OBS) up -d --build
 
 down-obs:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.observability.yml down
+	$(DC_OBS) down
 
 logs-obs:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.observability.yml logs -f loki promtail grafana
+	$(DC_OBS) logs -f loki promtail grafana
