@@ -6,16 +6,18 @@
 
 - **서비스명**: 서간표
 - **목적**: 학생이 수강 이력을 기반으로 시간표를 구성하고, 맞춤 강의를 추천받는 웹 서비스
-- **팀원**: Minji, Hyungwoo, Yuhwan, Hayeon
+- **팀원**: Minji, Hyeongwoo, Yuhwan, Hayeon
 - **백엔드 스택**: FastAPI + SQLAlchemy + PostgreSQL + Redis
 - **프론트엔드 스택**: Next.js + React + TypeScript
+- **AI**: Ollama (`exaone3.5:7.8b`) — 교수 연구 요약, PaddleOCR — 시간표 이미지 인식
+- **모니터링 스택**: Prometheus + Grafana + Loki + Promtail
 
 ## 디렉토리 구조
 
 ```
 Opensource_Project/
 ├── app/                          # FastAPI 백엔드
-│   ├── main.py                   # FastAPI 앱 진입점, 라우터 등록
+│   ├── main.py                   # FastAPI 앱 진입점, 라우터 등록, /metrics 노출
 │   ├── database.py               # DB 연결 설정 (PostgreSQL + SQLAlchemy)
 │   ├── dependencies.py           # 공통 의존성 (get_current_student_id - JWT 검증)
 │   ├── api/                      # API 라우터
@@ -35,13 +37,6 @@ Opensource_Project/
 │   │   ├── activity.py           # Track, History, Cart
 │   │   └── post.py               # Post, Comment, PostLike
 │   ├── schemas/                  # Pydantic 스키마
-│   │   ├── auth.py
-│   │   ├── user.py
-│   │   ├── course.py
-│   │   ├── cart.py
-│   │   ├── history.py
-│   │   ├── syllabus.py
-│   │   └── post.py
 │   └── services/                 # 비즈니스 로직
 │       ├── auth_service.py       # Redis OTP 생성/검증
 │       ├── email_service.py      # SMTP 이메일 발송
@@ -62,7 +57,10 @@ Opensource_Project/
 │       │   ├── timetable/        # 시간표 페이지
 │       │   ├── profile/          # 프로필 페이지
 │       │   ├── graduation/       # 졸업요건 페이지
-│       │   └── community/        # 커뮤니티 게시판
+│       │   ├── community/        # 커뮤니티 게시판
+│       │   └── admin/            # 관리자 페이지
+│       │       ├── monitoring/   # 서버 상태 + Grafana 대시보드 (로그/메트릭 탭)
+│       │       └── professors/   # 교수 데이터 관리 (크롤링, AI 요약)
 │       ├── components/           # 재사용 컴포넌트
 │       │   ├── ui/               # shadcn/ui 공통 컴포넌트
 │       │   ├── features/         # 기능 컴포넌트
@@ -75,6 +73,18 @@ Opensource_Project/
 │       └── types/
 │           └── index.ts          # 공통 타입 (Course, User, Cart 등)
 ├── ocr-service/                  # PaddleOCR 마이크로서비스
+├── infra/
+│   └── observability/            # 관측 스택 설정 파일
+│       ├── loki/                 # Loki 로그 저장소 설정
+│       ├── promtail/             # 컨테이너 로그 수집기 설정
+│       ├── prometheus/           # 메트릭 수집 설정 (backend:8000/metrics 스크랩)
+│       └── grafana/
+│           └── provisioning/
+│               ├── datasources/  # Loki, Prometheus 데이터소스 자동 프로비저닝
+│               └── dashboards/
+│                   └── json/
+│                       ├── seoganpyo-overview.json   # 로그 대시보드
+│                       └── seoganpyo-metrics.json    # API 메트릭 대시보드
 ├── scripts/                      # 배포 스크립트
 │   ├── pre-deploy.sh             # 배포 전 점검
 │   └── post-deploy.sh            # 배포 후 헬스체크
@@ -83,6 +93,7 @@ Opensource_Project/
 ├── Dockerfile                    # 백엔드 (prod)
 ├── docker-compose.yml            # 전체 서비스 (prod)
 ├── docker-compose.dev.yml        # 로컬 개발용 override
+├── docker-compose.observability.yml  # 관측 스택 (옵트인)
 └── requirements.txt
 ```
 
@@ -110,6 +121,14 @@ Opensource_Project/
 - API 엔드포인트: `/api/v1/<리소스>` 형태 권장
 - 프론트엔드 API 호출은 `src/lib/api.ts`에 집중 관리
 
+### 네이밍 룰
+
+- 브랜치: `feat/<기능명>`, `fix/<버그명>`, `chore/<작업명>` (영문 소문자, 하이픈 구분)
+- 파일명: Python `snake_case.py`, TypeScript 컴포넌트 `PascalCase.tsx`, 훅 `useCamelCase.ts`
+- DB 컬럼: `snake_case`
+- 환경 변수: `UPPER_SNAKE_CASE`
+- Docker 컨테이너: `seoganpyo-<서비스명>` (예: `seoganpyo-api`, `seoganpyo-grafana`)
+
 ## 환경 변수
 
 `.env.example`을 복사해서 `.env`로 사용:
@@ -121,29 +140,54 @@ cp .env.example .env
 ## 실행 방법
 
 ```bash
-make dev     # 로컬 개발 (--reload + HMR + 로컬 PostgreSQL)
-make down    # 컨테이너 종료
-make prod    # VDI 배포 (pre-check → build → post-check)
-make logs    # 전체 로그 스트리밍
-make ps      # 컨테이너 상태 확인
+make dev      # 로컬 개발 (--reload + HMR)
+make down     # 컨테이너 종료
+make prod     # VDI 배포 (pre-check → build → post-check)
+make logs     # 전체 로그 스트리밍
+make ps       # 컨테이너 상태 확인
+make up-obs   # 관측 스택 추가 기동 (Loki + Promtail + Prometheus + Grafana)
+make down-obs # 관측 스택 종료
 ```
 
-### 직접 실행 (Docker 없이)
+## 모니터링
 
-```bash
-# 백엔드
-pip install -r requirements.txt
-uvicorn app.main:app --reload        # http://localhost:8000
+관측 스택은 옵트인 방식 — 평소 개발 시에는 띄우지 않아도 됨.
 
-# 프론트엔드
-cd frontend && pnpm install && pnpm dev   # http://localhost:3000
-```
+| 서비스     | 포트 | 역할                        |
+| ---------- | ---- | --------------------------- |
+| Grafana    | 3001 | 대시보드 시각화             |
+| Loki       | 3100 | 로그 저장소                 |
+| Prometheus | 9090 | 메트릭 저장소               |
+| Promtail   | —    | 컨테이너 stdout 수집 → Loki |
+
+- **메트릭 엔드포인트**: `GET /metrics` (prometheus-fastapi-instrumentator 자동 생성)
+- **admin 모니터링 페이지**: `/admin/monitoring` — 헬스체크 + Grafana 로그/메트릭 탭 내장
 
 ## 주의사항
 
+### 공통
+
 - `.env` 파일은 커밋하지 않는다.
+- `frontend/next-env.d.ts`는 자동 생성 파일 — `.gitignore` 처리됨, 커밋하지 않는다.
+
+### 백엔드
+
 - DB 테이블은 `Base.metadata.create_all()`로 자동 생성된다.
 - 새 모델 추가 시 `app/main.py`의 import에 반드시 포함해야 테이블이 생성된다.
 - `passlib[bcrypt]`는 bcrypt 4.x 이상과 호환되지 않아 `bcrypt==4.0.1`로 고정.
+- SQLAlchemy 모델에서 PostgreSQL 전용 타입(`JSONB` 등) 사용 시 테스트(SQLite)에서 깨짐 — `from sqlalchemy import JSON` 사용.
+- 새 패키지 추가 시 `requirements.txt`에 반드시 포함해야 Docker 컨테이너에 반영된다.
+
+### AI / 크롤링
+
 - PaddleOCR은 설치 시간이 길고 이미지 크기가 큼 — Docker 빌드 시 주의.
 - Ollama AI 요약은 `host.docker.internal:11434`로 호스트 Ollama에 접근 (Docker 내부에서).
+- Ollama는 로컬에서 별도로 `ollama serve` 실행 필요 — 현재 모델: `exaone3.5:7.8b`.
+
+### 모니터링
+
+- `make up-obs`는 `make dev`가 실행 중인 상태에서 overlay로 추가 실행하는 것 — 단독 실행 불가.
+- Docker 볼륨 마운트 전 설정 파일이 없으면 Docker가 자동으로 디렉토리를 생성해버림 → 마운트 오류 발생. `infra/observability/` 하위 설정 파일 먼저 확인.
+- Grafana provisioning 파일 변경 후엔 `docker restart seoganpyo-grafana` 필요.
+- Grafana 대시보드 JSON의 datasource `uid`는 provisioning YAML의 `uid`와 반드시 일치해야 함 (`loki`, `prometheus`).
+- Prometheus 메트릭 라벨: `status="2xx"/"4xx"/"5xx"` (숫자 코드 아님) — 쿼리 시 `status="4xx"` 형태로 사용.
