@@ -11,9 +11,10 @@ datasources:
       jsonData:
           maxLines: 1000
 
-# === 1-B: Prometheus 도입 시 아래 주석 해제 ===
-#     - name: Prometheus
-#       type: prometheus
-#       access: proxy
-#       url: http://prometheus:9090
-#       editable: false
+    - name: Prometheus
+      uid: prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus:9090
+      isDefault: false
+      editable: false
