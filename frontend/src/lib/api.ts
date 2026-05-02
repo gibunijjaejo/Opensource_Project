@@ -30,10 +30,30 @@ async function request<T>(
       window.location.href = "/login"
     }
     const body = await res.json().catch(() => ({}))
+    // FastAPI HTTPException(detail=dict) 형태 — 구조화된 에러
+    if (body.detail && typeof body.detail === "object" && body.detail.title) {
+      const err = new Error(body.detail.message || body.detail.title) as ApiError
+      err.code = body.detail.code
+      err.title = body.detail.title
+      err.suggestion = body.detail.suggestion
+      err.status = res.status
+      throw err
+    }
     throw new Error(body.detail || body.message || "요청에 실패했습니다.")
   }
   if (res.status === 204) return undefined as T
   return res.json()
+}
+
+export interface ApiError extends Error {
+  code?: string
+  title?: string
+  suggestion?: string
+  status?: number
+}
+
+export function isApiError(e: unknown): e is ApiError {
+  return e instanceof Error && "title" in e
 }
 
 // ── Auth ──────────────────────────────────────────────
@@ -230,4 +250,73 @@ export const professorsApi = {
 
   get: (professorId: number) =>
     request<Professor>(`/api/v1/professors/${professorId}`),
+}
+
+// ── Portfolio ─────────────────────────────────────────
+export type PortfolioKind =
+  | "campus_activity"
+  | "external_activity"
+  | "certificate"
+  | "award"
+  | "project"
+
+export interface PortfolioEntry {
+  id: number
+  kind: PortfolioKind
+  title: string | null
+  content: string | null
+  entry_date: string | null
+  order_index: number
+  created_at: string
+  updated_at: string
+}
+
+export type PortfolioBySection = Record<PortfolioKind, PortfolioEntry[]>
+
+export interface PortfolioBulkItem {
+  id?: number | null
+  title?: string | null
+  content?: string | null
+  entry_date?: string | null
+  order_index?: number
+}
+
+export type EvaluationStatus = "pending" | "running" | "completed" | "failed"
+
+export interface PortfolioEvaluation {
+  id: number
+  status: EvaluationStatus
+  error_message: string | null
+  alignment_score: number | null
+  summary: string | null
+  strengths: string[]
+  weaknesses: string[]
+  suggestions: string[]
+  by_section: Record<string, string>
+  model_name: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+export const portfolioApi = {
+  getMine: () => request<PortfolioBySection>("/api/v1/portfolio"),
+
+  bulkSave: (sections: Record<PortfolioKind, PortfolioBulkItem[]>) =>
+    request<PortfolioBySection>("/api/v1/portfolio/bulk", {
+      method: "PUT",
+      body: JSON.stringify(sections),
+    }),
+
+  // 평가 요청 — 즉시 pending 응답 반환 (백그라운드 처리)
+  evaluate: () =>
+    request<PortfolioEvaluation>("/api/v1/portfolio/evaluate", {
+      method: "POST",
+    }),
+
+  // 특정 평가 폴링용
+  getEvaluation: (id: number) =>
+    request<PortfolioEvaluation>(`/api/v1/portfolio/evaluate/${id}`),
+
+  getLatestEvaluation: () =>
+    request<PortfolioEvaluation | null>("/api/v1/portfolio/evaluate/latest"),
 }
