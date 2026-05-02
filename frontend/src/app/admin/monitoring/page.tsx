@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button"
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 const GRAFANA_URL = process.env.NEXT_PUBLIC_GRAFANA_URL || "http://localhost:3001"
 
+const DASHBOARDS = [
+  { id: "seoganpyo-overview", label: "로그" },
+  { id: "seoganpyo-metrics", label: "메트릭" },
+]
+
 function getAdminToken() {
   if (typeof document === "undefined") return null
   const match = document.cookie.match(/admin_token=([^;]+)/)
@@ -26,6 +31,7 @@ export default function AdminMonitoringPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
   const [error, setError] = useState("")
+  const [activeDashboard, setActiveDashboard] = useState(DASHBOARDS[0].id)
 
   const token = getAdminToken()
 
@@ -121,13 +127,31 @@ export default function AdminMonitoringPage() {
 
       </div>
 
-      {/* Grafana 통합 모니터링 대시보드 (iframe 임베드) */}
+      {/* Grafana 대시보드 탭 */}
       <div className="mt-8">
-        <p className="text-xs font-medium text-muted-foreground mb-3">상세 모니터링 (Grafana)</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-medium text-muted-foreground">상세 모니터링 (Grafana)</p>
+          <div className="flex rounded-md border border-border overflow-hidden text-xs">
+            {DASHBOARDS.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setActiveDashboard(d.id)}
+                className={`px-3 py-1.5 transition-colors ${
+                  activeDashboard === d.id
+                    ? "bg-foreground text-background font-medium"
+                    : "bg-card text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="rounded-lg border border-border overflow-hidden bg-card">
           <iframe
-            src={`${GRAFANA_URL}/d/seoganpyo-overview/?orgId=1&kiosk=tv&theme=light&refresh=30s`}
-            title="서간표 통합 모니터링"
+            key={activeDashboard}
+            src={`${GRAFANA_URL}/d/${activeDashboard}/?orgId=1&kiosk=tv&theme=light&refresh=30s`}
+            title="서간표 모니터링"
             className="w-full"
             style={{ height: 900, border: 0 }}
           />
