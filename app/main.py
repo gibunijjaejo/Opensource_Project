@@ -3,6 +3,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.api import auth, upload, courses, cart, history, users, admin, syllabus, posts, contact, professors
@@ -19,6 +20,8 @@ logging.basicConfig(
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="서간표 통합 서버")
+
+Instrumentator().instrument(app).expose(app)
 
 os.makedirs("static/uploads/posts", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -87,6 +87,7 @@ node_modules/
 .next/
 out/
 *.tsbuildinfo
+frontend/next-env.d.ts
 .env.local
 .env.development.local
 .env.test.local
