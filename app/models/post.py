@@ -14,7 +14,6 @@ class Post(Base):
     file_path = Column(String(500), nullable=True)
     file_name = Column(String(255), nullable=True)
     is_anonymous = Column(Boolean, default=False, nullable=False)
-    is_hidden = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     author = relationship("User", back_populates="posts")
@@ -28,7 +27,6 @@ class Comment(Base):
     post_id = Column(Integer, ForeignKey("posts.id"), nullable=False)
     content = Column(Text, nullable=False)
     student_id = Column(Integer, ForeignKey("users.student_id"), nullable=True)
-    is_hidden = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     post = relationship("Post", back_populates="comments")

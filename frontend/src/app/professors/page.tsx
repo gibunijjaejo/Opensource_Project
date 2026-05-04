@@ -207,8 +207,8 @@ function ProfessorsContent() {
                       </div>
 
                       {/* 이름 */}
-                      <div className="flex-shrink-0 border-t border-gray-100 bg-white px-2 py-2 text-center dark:border-gray-700 dark:bg-card">
-                        <p className="truncate font-bold text-gray-800 dark:text-foreground"
+                      <div className="flex-shrink-0 border-t border-gray-100 bg-white px-2 py-2 text-center">
+                        <p className="truncate font-bold text-gray-800"
                           style={{ fontSize: 12, letterSpacing: "0.2em" }}>
                           {prof.name}
                         </p>
@@ -231,7 +231,7 @@ function ProfessorsContent() {
 
             {/* 현재 교수 이름 */}
             <p className="text-sm font-semibold text-foreground h-5 transition-all">
-              {professors[activeIndex]?.name} 교수
+              {professors[activeIndex]?.name} 교수님
             </p>
 
             {/* PREV / NEXT */}
@@ -239,7 +239,8 @@ function ProfessorsContent() {
               <button
                 onClick={prev}
                 disabled={activeIndex === 0}
-                className="flex items-center gap-1 rounded-md border border-border bg-card px-5 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1 rounded-md px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-35 disabled:cursor-not-allowed transition-opacity"
+                style={{ backgroundColor: "#B1000E" }}
               >
                 <ChevronLeft className="h-4 w-4" /> PREV
               </button>

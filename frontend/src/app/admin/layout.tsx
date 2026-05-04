@@ -1,22 +1,35 @@
 "use client"
 
 import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { BookOpen, LayoutDashboard, Users, Flag, Activity, GraduationCap, FileText, LogOut } from "lucide-react"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 
-const NAV = [
-  { href: "/admin", label: "대시보드", icon: LayoutDashboard, exact: true },
-  { href: "/admin/users", label: "사용자 관리", icon: Users },
-  { href: "/admin/reports", label: "신고 관리", icon: Flag },
-  { href: "/admin/professors", label: "교수 데이터", icon: GraduationCap },
-  { href: "/admin/lectures", label: "강의계획서", icon: FileText },
-  { href: "/admin/monitoring", label: "모니터링", icon: Activity },
-]
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
+
+function getAdminToken() {
+  if (typeof document === "undefined") return null
+  const match = document.cookie.match(/admin_token=([^;]+)/)
+  return match ? match[1] : null
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [pendingReports, setPendingReports] = useState(0)
+
+  useEffect(() => {
+    if (pathname === "/admin/login") return
+    const token = getAdminToken()
+    if (!token) return
+    fetch(`${BASE_URL}/admin/reports/counts`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data) setPendingReports(data.total) })
+      .catch(() => {})
+  }, [pathname])
 
   if (pathname === "/admin/login") return <>{children}</>
 
@@ -24,6 +37,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     document.cookie = "admin_token=; path=/; max-age=0"
     router.replace("/admin/login")
   }
+
+  const NAV = [
+    { href: "/admin", label: "대시보드", icon: LayoutDashboard, exact: true, badge: 0 },
+    { href: "/admin/users", label: "사용자 관리", icon: Users, exact: false, badge: 0 },
+    { href: "/admin/reports", label: "신고 관리", icon: Flag, exact: false, badge: pendingReports },
+    { href: "/admin/professors", label: "교수 데이터", icon: GraduationCap, exact: false, badge: 0 },
+    { href: "/admin/lectures", label: "강의계획서", icon: FileText, exact: false, badge: 0 },
+    { href: "/admin/monitoring", label: "모니터링", icon: Activity, exact: false, badge: 0 },
+  ]
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -35,7 +57,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
-          {NAV.map(({ href, label, icon: Icon, exact }) => {
+          {NAV.map(({ href, label, icon: Icon, exact, badge }) => {
             const active = exact ? pathname === href : pathname.startsWith(href)
             return (
               <Link
@@ -48,7 +70,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }`}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />
-                {label}
+                <span className="flex-1">{label}</span>
+                {badge > 0 && (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                    {badge}
+                  </span>
+                )}
               </Link>
             )
           })}

@@ -123,6 +123,7 @@ Opensource_Project/
 ### 테스트 아티팩트 ###
 test-results/
 reports/
+!frontend/src/app/admin/reports/
 frontend/playwright-report/
 frontend/test-results/
 
