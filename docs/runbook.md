@@ -154,7 +154,7 @@ sleep 60 && curl -s http://localhost:8001/health
 ## 5. 자주 발생하는 장애 사례
 
 ### CASE 1. 로그인/회원가입이 안 될 때
-**원인:** `users` 테이블 컬럼 누락
+**원인 A:** `users` 테이블 컬럼 누락 (interests, target_careers)
 ```bash
 docker compose exec -T seoganpyo-api python -c "
 from app.database import engine
@@ -166,6 +166,19 @@ with engine.connect() as conn:
     print('done')
 "
 ```
+
+**원인 B:** `users.is_approved` 컬럼 누락 — 기존 DB에 컬럼이 없으면 `if not user.is_approved` 체크 시 AttributeError/컬럼 오류 발생, 기존 사용자 전원 로그인 불가
+```bash
+docker compose exec -T seoganpyo-api python -c "
+from app.database import engine
+import sqlalchemy as sa
+with engine.connect() as conn:
+    conn.execute(sa.text(\"ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT TRUE\"))
+    conn.commit()
+    print('done')
+"
+```
+> ⚠️ `DEFAULT TRUE` 로 설정해야 기존 사용자의 로그인이 유지됩니다. 신규 가입자는 `DEFAULT FALSE`(이메일 인증 후 승인)이지만, 이미 가입된 계정은 즉시 로그인 가능 상태여야 합니다.
 
 ### CASE 2. 게시글 등록이 안 될 때
 **원인:** `posts` 테이블 컬럼 누락
