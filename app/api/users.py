@@ -62,7 +62,7 @@ def get_unread_messages(
 ):
     msgs = (
         db.query(AdminMessage)
-        .filter(AdminMessage.recipient_id == student_id, AdminMessage.is_read == False)
+        .filter(AdminMessage.recipient_id == student_id, AdminMessage.is_read.is_(False))
         .order_by(AdminMessage.created_at.asc())
         .all()
     )
