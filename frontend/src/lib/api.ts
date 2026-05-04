@@ -228,6 +228,12 @@ export const communityApi = {
 
   toggleCommentLike: (category: string, postId: number, commentId: number) =>
     request<{ liked: boolean; likes: number }>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/comments/${commentId}/like`, { method: "POST" }),
+
+  reportPost: (category: string, postId: number, reason: string, detail?: string) =>
+    request<{ message: string }>(`/api/v1/community/${encodeURIComponent(category)}/${postId}/report`, {
+      method: "POST",
+      body: JSON.stringify({ reason, detail }),
+    }),
 }
 
 // ── Contact ───────────────────────────────────────────

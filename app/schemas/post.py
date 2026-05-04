@@ -11,7 +11,7 @@ class CommentResponse(BaseModel):
     id: int
     post_id: int
     content: str
-    student_id: int
+    student_id: Optional[int] = None
     author_name: Optional[str] = None
     created_at: datetime
     likes: int = 0
@@ -53,3 +53,8 @@ class LikeResponse(BaseModel):
 
 class PostDetailResponse(PostResponse):
     comments: List[CommentResponse] = []
+
+
+class ReportCreate(BaseModel):
+    reason: str             # "욕설" | "스팸" | "기타"
+    detail: Optional[str] = None

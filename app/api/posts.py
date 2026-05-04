@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_student_id
 from app.models.post import Post, Comment, PostLike, CommentLike
-from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse, PostUpdate
+from app.models.report import Report
+from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse, PostUpdate, ReportCreate
 
 UPLOAD_DIR = "static/uploads/posts"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -133,6 +134,39 @@ def delete_post(
         raise HTTPException(status_code=403, detail="삭제 권한이 없습니다.")
     db.delete(post)
     db.commit()
+
+
+# ── 신고 ──────────────────────────────────────────────
+
+VALID_REASONS = {"욕설", "스팸", "기타"}
+
+@router.post("/{category}/{post_id}/report", status_code=201)
+def report_post(
+    category: str,
+    post_id: int,
+    req: ReportCreate,
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+):
+    post = db.query(Post).filter(Post.id == post_id, Post.category == category).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    if post.student_id == student_id:
+        raise HTTPException(status_code=400, detail="본인 게시글은 신고할 수 없습니다.")
+    if req.reason not in VALID_REASONS:
+        raise HTTPException(status_code=400, detail="올바르지 않은 신고 사유입니다.")
+    duplicate = db.query(Report).filter(
+        Report.reporter_id == student_id,
+        Report.target_type == "post",
+        Report.target_id == post_id,
+    ).first()
+    if duplicate:
+        raise HTTPException(status_code=409, detail="이미 신고한 게시글입니다.")
+    api_scores = {"detail": req.detail} if req.detail else None
+    report = Report(reporter_id=student_id, target_type="post", target_id=post_id, reason=req.reason, api_scores=api_scores)
+    db.add(report)
+    db.commit()
+    return {"message": "신고가 접수되었습니다."}
 
 
 # ── 좋아요 ────────────────────────────────────────────
