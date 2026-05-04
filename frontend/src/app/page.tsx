@@ -119,7 +119,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-2.5">
               <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
               <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
-              <span className="hidden sm:inline text-xs text-muted-foreground font-mono border-l border-border pl-2.5 ml-0.5">
+              <span className="hidden sm:inline text-xs text-muted-foreground border-l border-border pl-2.5 ml-0.5">
                 {getCurrentSemester().label}
               </span>
             </div>
