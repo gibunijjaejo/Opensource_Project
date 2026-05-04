@@ -1,9 +1,12 @@
+import logging
 import re
 import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import process, fuzz
 from sqlalchemy.orm import Session
 from app.models.professor import Professor, ProfessorDetail
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://cs.sogang.ac.kr"
 LIST_URL = f"{BASE_URL}/cs/cs02_1_001.html"
@@ -48,7 +51,7 @@ def _summarize_research_area(text: str, prompt_override: str | None = None) -> s
             text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
             return text or None
     except Exception as e:
-        print(f"[Ollama] 요약 실패: {e}")
+        logger.warning("[Ollama] 요약 실패: %s", e)
         return None
 
 

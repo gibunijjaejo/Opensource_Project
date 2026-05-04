@@ -105,7 +105,7 @@ export default function AdminLecturesPage() {
     })
       .then((res) => res.json())
       .then(setLectures)
-      .catch(console.error)
+      .catch((e: unknown) => setJob({ type: "error", message: e instanceof Error ? e.message : "강의 목록을 불러오지 못했습니다." }))
       .finally(() => setIsLoading(false))
   }
 
@@ -190,8 +190,8 @@ export default function AdminLecturesPage() {
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const data: LectureDetail = await res.json()
       setDetailMap((prev) => ({ ...prev, [courseId]: data }))
-    } catch (e) {
-      console.error(e)
+    } catch (e: unknown) {
+      setJob({ type: "error", message: e instanceof Error ? e.message : "상세 정보를 불러오지 못했습니다." })
     } finally {
       setDetailLoadingId(null)
     }
@@ -227,8 +227,8 @@ export default function AdminLecturesPage() {
           setDetailLoadingId(null)
         }
       }
-    } catch (e) {
-      console.error(e)
+    } catch (e: unknown) {
+      setJob({ type: "error", message: e instanceof Error ? e.message : "요약 생성에 실패했습니다." })
     } finally {
       setSummaryingId(null)
     }
