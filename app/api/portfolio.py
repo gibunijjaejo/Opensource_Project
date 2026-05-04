@@ -264,6 +264,23 @@ def request_evaluation(
     return _evaluation_to_response(evaluation)
 
 
+@router.get("/evaluate/latest", response_model=Optional[PortfolioEvaluationResponse])
+def get_latest_evaluation(
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+):
+    """가장 최근 평가 조회 (페이지 진입 시 진행 중인 평가가 있는지 확인)."""
+    evaluation = (
+        db.query(PortfolioEvaluation)
+        .filter(PortfolioEvaluation.student_id == student_id)
+        .order_by(PortfolioEvaluation.created_at.desc())
+        .first()
+    )
+    if not evaluation:
+        return None
+    return _evaluation_to_response(evaluation)
+
+
 @router.get("/evaluate/{evaluation_id}", response_model=PortfolioEvaluationResponse)
 def get_evaluation(
     evaluation_id: int,
@@ -281,23 +298,6 @@ def get_evaluation(
     )
     if not evaluation:
         raise HTTPException(status_code=404, detail="평가 결과를 찾을 수 없습니다.")
-    return _evaluation_to_response(evaluation)
-
-
-@router.get("/evaluate/latest", response_model=Optional[PortfolioEvaluationResponse])
-def get_latest_evaluation(
-    student_id: int = Depends(get_current_student_id),
-    db: Session = Depends(get_db),
-):
-    """가장 최근 평가 조회 (페이지 진입 시 진행 중인 평가가 있는지 확인)."""
-    evaluation = (
-        db.query(PortfolioEvaluation)
-        .filter(PortfolioEvaluation.student_id == student_id)
-        .order_by(PortfolioEvaluation.created_at.desc())
-        .first()
-    )
-    if not evaluation:
-        return None
     return _evaluation_to_response(evaluation)
 
 
