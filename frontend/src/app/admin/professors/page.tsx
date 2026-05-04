@@ -67,7 +67,7 @@ export default function AdminProfessorsPage() {
     })
       .then((res) => res.json())
       .then(setProfessors)
-      .catch(console.error)
+      .catch((e: unknown) => setJob({ type: "error", message: e instanceof Error ? e.message : "교수 목록을 불러오지 못했습니다." }))
       .finally(() => setIsLoading(false))
   }
 
@@ -137,8 +137,8 @@ export default function AdminProfessorsPage() {
       })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       fetchProfessors()
-    } catch (e) {
-      console.error(e)
+    } catch (e: unknown) {
+      setJob({ type: "error", message: e instanceof Error ? e.message : "요약 생성에 실패했습니다." })
     } finally {
       setSummaryingId(null)
     }

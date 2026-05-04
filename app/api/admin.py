@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import re
@@ -21,6 +22,8 @@ from app.services import user_service
 from app.services.user_service import delete_user
 from app.services.crawl_service import crawl_and_upsert
 from app.services.syllabus_service import process_pdf_for_batch
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -244,12 +247,12 @@ def resummarize_all(
         plain = _to_plain(detail.research_area)
         if not plain:
             continue
-        print(f"[Ollama] {detail.name} 요약 중...", flush=True)
+        logger.info("[Ollama] %s 요약 중...", detail.name)
         summary = _summarize_research_area(plain, prompt_override=body.prompt_override)
         if summary:
             detail.research_summary = summary
             results.append({"professor_id": detail.professor_id, "name": detail.name})
-            print(f"[Ollama] {detail.name} 완료", flush=True)
+            logger.info("[Ollama] %s 완료", detail.name)
 
     db.commit()
     return {"updated_count": len(results), "results": results}
