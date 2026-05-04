@@ -134,25 +134,71 @@ def delete_user_admin(
 
 
 # ── 신고 관리 ─────────────────────────────────────────
+@router.get("/reports/counts")
+def get_report_counts(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(Report.reason, func.count(Report.id))
+        .filter(Report.status == "pending")
+        .group_by(Report.reason)
+        .all()
+    )
+    counts: dict[str, int] = {"욕설": 0, "스팸": 0, "기타": 0}
+    for reason, cnt in rows:
+        if reason in counts:
+            counts[reason] = cnt
+    return {"total": sum(counts.values()), **counts}
+
+
 @router.get("/reports")
 def get_reports(
     status: Optional[str] = None,
+    reason: Optional[str] = None,
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     query = db.query(Report)
     if status:
         query = query.filter(Report.status == status)
+    if reason:
+        query = query.filter(Report.reason == reason)
     reports = query.order_by(Report.created_at.desc()).all()
+
+    post_ids = {r.target_id for r in reports if r.target_type == "post"}
+    comment_ids = {r.target_id for r in reports if r.target_type == "comment"}
+    posts = {p.id: p for p in db.query(Post).filter(Post.id.in_(post_ids)).all()} if post_ids else {}
+    comments = {c.id: c for c in db.query(Comment).filter(Comment.id.in_(comment_ids)).all()} if comment_ids else {}
+
+    def target_info(r: Report) -> dict:
+        if r.target_type == "post":
+            p = posts.get(r.target_id)
+            return {
+                "target_title": p.title if p else None,
+                "target_content": p.content if p else None,
+                "target_author": (p.author.name if p.author else None) if p and not p.is_anonymous else "익명",
+                "target_category": p.category if p else None,
+            }
+        c = comments.get(r.target_id)
+        return {
+            "target_title": None,
+            "target_content": c.content if c else None,
+            "target_author": c.author.name if (c and c.author) else None,
+            "target_category": None,
+        }
+
     return [
         {
             "id": r.id,
             "reporter_id": r.reporter_id,
+            "reporter_name": r.reporter.name if r.reporter else None,
             "target_type": r.target_type,
             "target_id": r.target_id,
+            **target_info(r),
             "reason": r.reason,
+            "detail": r.api_scores.get("detail") if isinstance(r.api_scores, dict) else None,
             "status": r.status,
-            "api_scores": r.api_scores,
             "created_at": r.created_at,
         }
         for r in reports
@@ -172,13 +218,13 @@ def resolve_report(
     if report.target_type == "post":
         post = db.query(Post).filter(Post.id == report.target_id).first()
         if post:
-            post.is_hidden = True
+            db.delete(post)
     elif report.target_type == "comment":
         comment = db.query(Comment).filter(Comment.id == report.target_id).first()
         if comment:
-            comment.is_hidden = True
+            db.delete(comment)
     db.commit()
-    return {"message": "처리 완료", "report_id": report_id}
+    return {"message": "삭제 완료", "report_id": report_id}
 
 
 @router.patch("/reports/{report_id}/dismiss")

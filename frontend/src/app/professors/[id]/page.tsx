@@ -179,11 +179,11 @@ export default function ProfessorDetailPage({ params }: Props) {
                     </div>
                   </div>
 
-                  <div className="border-t border-gray-100 bg-white px-2 py-2.5 text-center dark:border-gray-700 dark:bg-card">
-                    <p className="font-bold text-gray-800 dark:text-foreground" style={{ fontSize: 13, letterSpacing: "0.25em" }}>
+                  <div className="border-t border-gray-100 bg-white px-2 py-2.5 text-center">
+                    <p className="font-bold text-gray-800" style={{ fontSize: 13, letterSpacing: "0.25em" }}>
                       {professor.name.split("").join(" ")}
                     </p>
-                    <p className="text-gray-500 mt-0.5" style={{ fontSize: 9, letterSpacing: "0.1em" }}>교수</p>
+                    <p className="text-gray-500 mt-0.5" style={{ fontSize: 9, letterSpacing: "0.1em" }}>교수님</p>
                   </div>
 
                   <div className="py-1.5 text-center" style={{ backgroundColor: "#B1000E" }}>
