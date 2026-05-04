@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Trash2, Ban, CheckCircle, Loader2, ShieldCheck } from "lucide-react"
+import { Search, Trash2, Ban, CheckCircle, Loader2, ShieldCheck, Pencil, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
@@ -23,12 +23,23 @@ type UserItem = {
   current_semester: number | null
 }
 
+type EditForm = {
+  name: string
+  email: string
+  current_semester: string
+}
+
 export default function AdminUsersPage() {
   const router = useRouter()
   const [users, setUsers] = useState<UserItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [actionId, setActionId] = useState<number | null>(null)
+
+  const [editTarget, setEditTarget] = useState<UserItem | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({ name: "", email: "", current_semester: "" })
+  const [isSaving, setIsSaving] = useState(false)
+  const [editError, setEditError] = useState("")
 
   const token = getAdminToken()
 
@@ -71,6 +82,43 @@ export default function AdminUsersPage() {
     })
     await fetchUsers(search || undefined)
     setActionId(null)
+  }
+
+  const openEdit = (user: UserItem) => {
+    setEditTarget(user)
+    setEditForm({
+      name: user.name,
+      email: user.email,
+      current_semester: user.current_semester != null ? String(user.current_semester) : "",
+    })
+    setEditError("")
+  }
+
+  const handleEditSave = async () => {
+    if (!editTarget || !token) return
+    if (!editForm.name.trim() || !editForm.email.trim()) {
+      setEditError("이름과 이메일은 필수입니다.")
+      return
+    }
+    setIsSaving(true)
+    setEditError("")
+    const res = await fetch(`${BASE_URL}/admin/users/${editTarget.student_id}/info`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        current_semester: editForm.current_semester ? Number(editForm.current_semester) : null,
+      }),
+    })
+    if (res.ok) {
+      setEditTarget(null)
+      await fetchUsers(search || undefined)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      setEditError(data.detail || "수정에 실패했습니다.")
+    }
+    setIsSaving(false)
   }
 
   return (
@@ -139,7 +187,14 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        onClick={() => openEdit(user)}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        title="정보 수정"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                       {user.role !== "admin" && (
                         <>
                           <button
@@ -171,6 +226,73 @@ export default function AdminUsersPage() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 사용자 정보 수정 모달 */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">
+                사용자 정보 수정 <span className="text-muted-foreground font-normal">({editTarget.student_id})</span>
+              </h3>
+              <button onClick={() => setEditTarget(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">이름</label>
+                <Input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">이메일</label>
+                <Input
+                  value={editForm.email}
+                  onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                  className="h-9 text-sm"
+                  type="email"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">현재 학기</label>
+                <Input
+                  value={editForm.current_semester}
+                  onChange={(e) => setEditForm((f) => ({ ...f, current_semester: e.target.value }))}
+                  className="h-9 text-sm"
+                  type="number"
+                  min={1}
+                  max={16}
+                  placeholder="예: 5"
+                />
+              </div>
+            </div>
+
+            {editError && (
+              <p className="text-xs text-red-500">{editError}</p>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditTarget(null)}>
+                취소
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                style={{ backgroundColor: "#B0232A" }}
+                onClick={handleEditSave}
+                disabled={isSaving}
+              >
+                {isSaving ? "저장 중..." : "저장"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

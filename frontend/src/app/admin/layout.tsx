@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { BookOpen, LayoutDashboard, Users, Flag, Activity, GraduationCap, FileText, LogOut } from "lucide-react"
+import { BookOpen, LayoutDashboard, Users, Flag, Activity, GraduationCap, FileText, LogOut, MessageSquare } from "lucide-react"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
@@ -18,6 +18,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   const router = useRouter()
   const [pendingReports, setPendingReports] = useState(0)
+  const [pendingContacts, setPendingContacts] = useState(0)
 
   useEffect(() => {
     if (pathname === "/admin/login") return
@@ -28,6 +29,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => { if (data) setPendingReports(data.total) })
+      .catch(() => {})
+    fetch(`${BASE_URL}/admin/contacts/counts`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data) setPendingContacts(data.total) })
       .catch(() => {})
   }, [pathname])
 
@@ -42,6 +49,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin", label: "대시보드", icon: LayoutDashboard, exact: true, badge: 0 },
     { href: "/admin/users", label: "사용자 관리", icon: Users, exact: false, badge: 0 },
     { href: "/admin/reports", label: "신고 관리", icon: Flag, exact: false, badge: pendingReports },
+    { href: "/admin/contacts", label: "문의 관리", icon: MessageSquare, exact: false, badge: pendingContacts },
     { href: "/admin/professors", label: "교수 데이터", icon: GraduationCap, exact: false, badge: 0 },
     { href: "/admin/lectures", label: "강의계획서", icon: FileText, exact: false, badge: 0 },
     { href: "/admin/monitoring", label: "모니터링", icon: Activity, exact: false, badge: 0 },

@@ -16,6 +16,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.post import Post, Comment
 from app.models.report import Report
+from app.models.contact import Contact
 from app.models.course import Course, CourseDetail
 from app.services import user_service
 from app.services.user_service import delete_user
@@ -130,6 +131,40 @@ def delete_user_admin(
     return {"message": "탈퇴 처리 완료"}
 
 
+class UserInfoUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    current_semester: Optional[int] = None
+
+
+@router.patch("/users/{student_id}/info")
+def update_user_info(
+    student_id: int,
+    body: UserInfoUpdate,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    if body.name is not None:
+        user.name = body.name.strip()
+    if body.email is not None:
+        dup = db.query(User).filter(User.email == body.email, User.student_id != student_id).first()
+        if dup:
+            raise HTTPException(status_code=400, detail="이미 사용 중인 이메일입니다.")
+        user.email = body.email.strip()
+    if body.current_semester is not None:
+        user.current_semester = body.current_semester
+    db.commit()
+    return {
+        "student_id": user.student_id,
+        "name": user.name,
+        "email": user.email,
+        "current_semester": user.current_semester,
+    }
+
+
 # ── 신고 관리 ─────────────────────────────────────────
 @router.get("/reports/counts")
 def get_report_counts(
@@ -236,6 +271,69 @@ def dismiss_report(
     report.status = "dismissed"
     db.commit()
     return {"message": "기각 완료", "report_id": report_id}
+
+
+# ── 문의 관리 ─────────────────────────────────────────
+@router.get("/contacts/counts")
+def get_contact_counts(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    total = db.query(func.count(Contact.id)).filter(Contact.status == "pending").scalar()
+    return {"total": total}
+
+
+@router.get("/contacts")
+def get_contacts(
+    status: Optional[str] = None,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Contact)
+    if status:
+        query = query.filter(Contact.status == status)
+    contacts = query.order_by(Contact.created_at.desc()).all()
+    return [
+        {
+            "id": c.id,
+            "student_id": c.student_id,
+            "sender_name": c.sender_name,
+            "sender_email": c.sender_email,
+            "subject": c.subject,
+            "content": c.content,
+            "status": c.status,
+            "created_at": c.created_at,
+        }
+        for c in contacts
+    ]
+
+
+@router.patch("/contacts/{contact_id}/resolve")
+def resolve_contact(
+    contact_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="문의를 찾을 수 없습니다.")
+    contact.status = "resolved"
+    db.commit()
+    return {"message": "처리 완료"}
+
+
+@router.patch("/contacts/{contact_id}/dismiss")
+def dismiss_contact(
+    contact_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="문의를 찾을 수 없습니다.")
+    contact.status = "dismissed"
+    db.commit()
+    return {"message": "기각 완료"}
 
 
 # ── 교수 관리 ─────────────────────────────────────────
