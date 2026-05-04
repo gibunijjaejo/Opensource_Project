@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { AdminMessageModal } from "@/components/features/admin-message-modal";
 
 export const metadata: Metadata = {
     title: "서간표",
@@ -23,6 +24,7 @@ export default function RootLayout({
                     enableSystem={false}
                 >
                     {children}
+                    <AdminMessageModal />
                 </ThemeProvider>
             </body>
         </html>

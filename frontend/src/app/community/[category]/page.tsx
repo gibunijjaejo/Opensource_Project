@@ -99,7 +99,9 @@ export default function CommunityPage({ params }: Props) {
       setShowForm(false)
       // 등록 후 바로 상세 표시
       handleSelectPost(post.id)
-    } catch {}
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "게시글 등록에 실패했습니다.")
+    }
     setIsSubmitting(false)
   }
 
@@ -128,7 +130,9 @@ export default function CommunityPage({ params }: Props) {
       const comment = await communityApi.createComment(decodedCategory, selectedPost.id, commentInput)
       setSelectedPost((prev) => prev ? { ...prev, comments: [...prev.comments, comment], comment_count: prev.comment_count + 1 } : prev)
       setCommentInput("")
-    } catch {}
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "댓글 등록에 실패했습니다.")
+    }
   }
 
   const handleDeleteComment = async (commentId: number) => {

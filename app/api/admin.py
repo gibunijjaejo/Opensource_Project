@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.database import get_db
@@ -18,7 +18,14 @@ from app.models.post import Post, Comment
 from app.models.report import Report
 from app.models.contact import Contact
 from app.models.course import Course, CourseDetail
-from app.services import user_service
+from app.schemas.admin import (
+    ReportCountsResponse, ReportItem, ReportActionResponse,
+    ContactCountsResponse, ContactItem, MessageResponse,
+    UserListItem, CanPostResponse, CanCommentResponse, UserInfoResponse,
+    AdminMessageCreate,
+)
+from app.models.admin_message import AdminMessage
+from app.services import user_service, report_service
 from app.services.user_service import delete_user
 from app.services.crawl_service import crawl_and_upsert
 from app.services.syllabus_service import process_pdf_for_batch
@@ -81,7 +88,7 @@ def health_check(admin: User = Depends(get_current_admin), db: Session = Depends
 
 
 # ── 사용자 관리 ───────────────────────────────────────
-@router.get("/users")
+@router.get("/users", response_model=list[UserListItem])
 def get_users(
     q: Optional[str] = None,
     admin: User = Depends(get_current_admin),
@@ -90,7 +97,7 @@ def get_users(
     query = db.query(User)
     if q:
         query = query.filter(User.name.ilike(f"%{q}%") | User.email.ilike(f"%{q}%"))
-    users = query.order_by(User.student_id).all()
+    users = query.order_by((User.role == "admin").desc(), User.student_id).all()
     return [
         {
             "student_id": u.student_id,
@@ -98,13 +105,14 @@ def get_users(
             "email": u.email,
             "role": u.role,
             "can_post": u.can_post,
+            "can_comment": u.can_comment,
             "current_semester": u.current_semester,
         }
         for u in users
     ]
 
 
-@router.patch("/users/{student_id}/can-post")
+@router.patch("/users/{student_id}/can-post", response_model=CanPostResponse)
 def toggle_can_post(
     student_id: int,
     admin: User = Depends(get_current_admin),
@@ -118,7 +126,137 @@ def toggle_can_post(
     return {"student_id": student_id, "can_post": user.can_post}
 
 
-@router.delete("/users/{student_id}")
+@router.patch("/users/{student_id}/can-comment", response_model=CanCommentResponse)
+def toggle_can_comment(
+    student_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    user.can_comment = not user.can_comment
+    db.commit()
+    return {"student_id": student_id, "can_comment": user.can_comment}
+
+
+# ── 게시글 관리 ───────────────────────────────────────
+@router.get("/posts/categories")
+def get_post_categories(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(Post.category, func.count(Post.id)).group_by(Post.category).all()
+    return [{"category": cat, "count": cnt} for cat, cnt in rows]
+
+
+def _format_author(author: Optional[User], is_anonymous: bool) -> Optional[str]:
+    if not author:
+        return None
+    return f"익명({author.name})" if is_anonymous else author.name
+
+
+@router.get("/posts")
+def get_all_posts(
+    category: Optional[str] = None,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Post)
+    if category:
+        query = query.filter(Post.category == category)
+    posts = query.order_by(Post.created_at.desc()).all()
+    return [
+        {
+            "id": p.id,
+            "category": p.category,
+            "title": p.title,
+            "content": p.content,
+            "author_name": _format_author(p.author, p.is_anonymous),
+            "is_anonymous": p.is_anonymous,
+            "student_id": p.student_id,
+            "comment_count": len(p.comments),
+            "like_count": len(p.likes),
+            "file_path": p.file_path,
+            "file_name": p.file_name,
+            "created_at": p.created_at,
+        }
+        for p in posts
+    ]
+
+
+@router.get("/posts/{post_id}/comments")
+def get_post_comments(
+    post_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    return [
+        {
+            "id": c.id,
+            "content": c.content,
+            "author_name": c.author.name if c.author else None,
+            "student_id": c.student_id,
+            "created_at": c.created_at,
+        }
+        for c in sorted(post.comments, key=lambda x: x.created_at)
+    ]
+
+
+@router.delete("/posts/{post_id}", response_model=MessageResponse)
+def delete_post_admin(
+    post_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
+    db.delete(post)
+    db.commit()
+    return {"message": "게시글이 삭제되었습니다."}
+
+
+@router.delete("/comments/{comment_id}", response_model=MessageResponse)
+def delete_comment_admin(
+    comment_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다.")
+    db.delete(comment)
+    db.commit()
+    return {"message": "댓글이 삭제되었습니다."}
+
+
+@router.post("/users/{student_id}/message", response_model=MessageResponse, status_code=201)
+def send_user_message(
+    student_id: int,
+    body: AdminMessageCreate,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    if not body.content or not body.content.strip():
+        raise HTTPException(status_code=400, detail="메시지 내용을 입력하세요.")
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    msg = AdminMessage(
+        recipient_id=student_id,
+        sender_id=admin.student_id,
+        content=body.content.strip(),
+    )
+    db.add(msg)
+    db.commit()
+    return {"message": "메시지가 전송되었습니다."}
+
+
+@router.delete("/users/{student_id}", response_model=MessageResponse)
 def delete_user_admin(
     student_id: int,
     admin: User = Depends(get_current_admin),
@@ -132,12 +270,13 @@ def delete_user_admin(
 
 
 class UserInfoUpdate(BaseModel):
+    new_student_id: Optional[int] = None
     name: Optional[str] = None
     email: Optional[str] = None
     current_semester: Optional[int] = None
 
 
-@router.patch("/users/{student_id}/info")
+@router.patch("/users/{student_id}/info", response_model=UserInfoResponse)
 def update_user_info(
     student_id: int,
     body: UserInfoUpdate,
@@ -157,6 +296,29 @@ def update_user_info(
     if body.current_semester is not None:
         user.current_semester = body.current_semester
     db.commit()
+
+    new_sid = body.new_student_id
+    if new_sid is not None and new_sid != student_id:
+        if db.query(User).filter(User.student_id == new_sid).first():
+            raise HTTPException(status_code=400, detail="이미 사용 중인 학번입니다.")
+        for tbl, col in [
+            ("contacts", "student_id"),
+            ("histories", "student_id"),
+            ("carts", "student_id"),
+            ("posts", "student_id"),
+            ("comments", "student_id"),
+            ("reports", "reporter_id"),
+            ("post_likes", "student_id"),
+            ("comment_likes", "student_id"),
+            ("portfolio_entries", "student_id"),
+            ("portfolio_evaluations", "student_id"),
+        ]:
+            db.execute(text(f"UPDATE {tbl} SET {col} = :new WHERE {col} = :old"), {"new": new_sid, "old": student_id})
+        db.execute(text("UPDATE users SET student_id = :new WHERE student_id = :old"), {"new": new_sid, "old": student_id})
+        db.commit()
+        student_id = new_sid
+        user = db.query(User).filter(User.student_id == student_id).first()
+
     return {
         "student_id": user.student_id,
         "name": user.name,
@@ -165,8 +327,29 @@ def update_user_info(
     }
 
 
+class PasswordReset(BaseModel):
+    new_password: str
+
+
+@router.patch("/users/{student_id}/password", response_model=MessageResponse)
+def reset_user_password(
+    student_id: int,
+    body: PasswordReset,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    if not body.new_password or len(body.new_password) < 4:
+        raise HTTPException(status_code=400, detail="비밀번호는 4자 이상이어야 합니다.")
+    user.password = user_service.hash_password(body.new_password)
+    db.commit()
+    return {"message": "비밀번호가 초기화되었습니다."}
+
+
 # ── 신고 관리 ─────────────────────────────────────────
-@router.get("/reports/counts")
+@router.get("/reports/counts", response_model=ReportCountsResponse)
 def get_report_counts(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -184,7 +367,7 @@ def get_report_counts(
     return {"total": sum(counts.values()), **counts}
 
 
-@router.get("/reports")
+@router.get("/reports", response_model=list[ReportItem])
 def get_reports(
     status: Optional[str] = None,
     reason: Optional[str] = None,
@@ -197,84 +380,31 @@ def get_reports(
     if reason:
         query = query.filter(Report.reason == reason)
     reports = query.order_by(Report.created_at.desc()).all()
-
-    post_ids = {r.target_id for r in reports if r.target_type == "post"}
-    comment_ids = {r.target_id for r in reports if r.target_type == "comment"}
-    posts = {p.id: p for p in db.query(Post).filter(Post.id.in_(post_ids)).all()} if post_ids else {}
-    comments = {c.id: c for c in db.query(Comment).filter(Comment.id.in_(comment_ids)).all()} if comment_ids else {}
-
-    def target_info(r: Report) -> dict:
-        if r.target_type == "post":
-            p = posts.get(r.target_id)
-            return {
-                "target_title": p.title if p else None,
-                "target_content": p.content if p else None,
-                "target_author": (p.author.name if p.author else None) if p and not p.is_anonymous else "익명",
-                "target_category": p.category if p else None,
-            }
-        c = comments.get(r.target_id)
-        return {
-            "target_title": None,
-            "target_content": c.content if c else None,
-            "target_author": c.author.name if (c and c.author) else None,
-            "target_category": None,
-        }
-
-    return [
-        {
-            "id": r.id,
-            "reporter_id": r.reporter_id,
-            "reporter_name": r.reporter.name if r.reporter else None,
-            "target_type": r.target_type,
-            "target_id": r.target_id,
-            **target_info(r),
-            "reason": r.reason,
-            "detail": r.api_scores.get("detail") if isinstance(r.api_scores, dict) else None,
-            "status": r.status,
-            "created_at": r.created_at,
-        }
-        for r in reports
-    ]
+    return report_service.enrich_reports(db, reports)
 
 
-@router.patch("/reports/{report_id}")
+@router.patch("/reports/{report_id}", response_model=ReportActionResponse)
 def resolve_report(
     report_id: int,
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    report = db.query(Report).filter(Report.id == report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="신고를 찾을 수 없습니다.")
-    report.status = "resolved"
-    if report.target_type == "post":
-        post = db.query(Post).filter(Post.id == report.target_id).first()
-        if post:
-            db.delete(post)
-    elif report.target_type == "comment":
-        comment = db.query(Comment).filter(Comment.id == report.target_id).first()
-        if comment:
-            db.delete(comment)
-    db.commit()
+    report_service.resolve_report(db, report_id)
     return {"message": "삭제 완료", "report_id": report_id}
 
 
-@router.patch("/reports/{report_id}/dismiss")
+@router.patch("/reports/{report_id}/dismiss", response_model=ReportActionResponse)
 def dismiss_report(
     report_id: int,
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    report = db.query(Report).filter(Report.id == report_id).first()
-    if not report:
-        raise HTTPException(status_code=404, detail="신고를 찾을 수 없습니다.")
-    report.status = "dismissed"
-    db.commit()
+    report_service.dismiss_report(db, report_id)
     return {"message": "기각 완료", "report_id": report_id}
 
 
 # ── 문의 관리 ─────────────────────────────────────────
-@router.get("/contacts/counts")
+@router.get("/contacts/counts", response_model=ContactCountsResponse)
 def get_contact_counts(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
@@ -283,7 +413,7 @@ def get_contact_counts(
     return {"total": total}
 
 
-@router.get("/contacts")
+@router.get("/contacts", response_model=list[ContactItem])
 def get_contacts(
     status: Optional[str] = None,
     admin: User = Depends(get_current_admin),
@@ -308,7 +438,7 @@ def get_contacts(
     ]
 
 
-@router.patch("/contacts/{contact_id}/resolve")
+@router.patch("/contacts/{contact_id}/resolve", response_model=MessageResponse)
 def resolve_contact(
     contact_id: int,
     admin: User = Depends(get_current_admin),
@@ -322,7 +452,7 @@ def resolve_contact(
     return {"message": "처리 완료"}
 
 
-@router.patch("/contacts/{contact_id}/dismiss")
+@router.patch("/contacts/{contact_id}/dismiss", response_model=MessageResponse)
 def dismiss_contact(
     contact_id: int,
     admin: User = Depends(get_current_admin),

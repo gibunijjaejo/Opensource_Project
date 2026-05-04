@@ -4,33 +4,10 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Flag, Loader2, CheckCircle, XCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
-
-function getAdminToken() {
-  if (typeof document === "undefined") return null
-  const match = document.cookie.match(/admin_token=([^;]+)/)
-  return match ? match[1] : null
-}
+import { adminApi, AdminReport } from "@/lib/api"
 
 type ReportStatus = "pending" | "resolved" | "dismissed"
 type ReasonTab = "전체" | "욕설" | "스팸" | "기타"
-
-interface Report {
-  id: number
-  reporter_id: number | null
-  reporter_name: string | null
-  target_type: string
-  target_id: number
-  target_title: string | null
-  target_content: string | null
-  target_author: string | null
-  target_category: string | null
-  reason: string
-  detail: string | null
-  status: ReportStatus
-  created_at: string
-}
 
 interface Counts {
   total: number
@@ -56,65 +33,53 @@ const STATUS_COLOR: Record<ReportStatus, string> = {
 export default function AdminReportsPage() {
   const router = useRouter()
   const [counts, setCounts] = useState<Counts>({ total: 0, 욕설: 0, 스팸: 0, 기타: 0 })
-  const [reports, setReports] = useState<Report[]>([])
+  const [reports, setReports] = useState<AdminReport[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedTab, setSelectedTab] = useState<ReasonTab>("전체")
-  const [statusFilter, setStatusFilter] = useState<ReportStatus | "">( "pending")
+  const [statusFilter, setStatusFilter] = useState<ReportStatus | "">("pending")
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [actioningId, setActioningId] = useState<number | null>(null)
 
-  const token = getAdminToken()
-
   const fetchCounts = useCallback(async () => {
-    if (!token) return
-    const res = await fetch(`${BASE_URL}/admin/reports/counts`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) setCounts(await res.json())
-  }, [token])
+    try {
+      setCounts(await adminApi.getReportCounts())
+    } catch {}
+  }, [])
 
   const fetchReports = useCallback(async () => {
-    if (!token) return
     setIsLoading(true)
-    const params = new URLSearchParams()
-    if (statusFilter) params.set("status", statusFilter)
-    if (selectedTab !== "전체") params.set("reason", selectedTab)
-    const res = await fetch(`${BASE_URL}/admin/reports?${params}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) setReports(await res.json())
+    try {
+      const data = await adminApi.getReports({
+        status: statusFilter || undefined,
+        reason: selectedTab !== "전체" ? selectedTab : undefined,
+      })
+      setReports(data)
+    } catch {}
     setIsLoading(false)
-  }, [token, statusFilter, selectedTab])
+  }, [statusFilter, selectedTab])
 
   useEffect(() => {
-    if (!token) { router.replace("/admin/login"); return }
     fetchCounts()
     fetchReports()
-  }, [token, fetchCounts, fetchReports, router])
+  }, [fetchCounts, fetchReports])
 
-  const handleResolve = async (reportId: number) => {
-    if (!token) return
-    setActioningId(reportId)
-    const res = await fetch(`${BASE_URL}/admin/reports/${reportId}`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) {
+  const handleResolve = async (report: AdminReport) => {
+    const targetLabel = report.target_type === "post" ? "게시글" : "댓글"
+    if (!confirm(`신고된 ${targetLabel}을 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.`)) return
+    setActioningId(report.id)
+    try {
+      await adminApi.resolveReport(report.id)
       await Promise.all([fetchCounts(), fetchReports()])
-    }
+    } catch {}
     setActioningId(null)
   }
 
   const handleDismiss = async (reportId: number) => {
-    if (!token) return
     setActioningId(reportId)
-    const res = await fetch(`${BASE_URL}/admin/reports/${reportId}/dismiss`, {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (res.ok) {
+    try {
+      await adminApi.dismissReport(reportId)
       await Promise.all([fetchCounts(), fetchReports()])
-    }
+    } catch {}
     setActioningId(null)
   }
 
@@ -201,46 +166,35 @@ export default function AdminReportsPage() {
           {reports.map((report) => {
             const expanded = expandedId === report.id
             const actioning = actioningId === report.id
+            const status = report.status as ReportStatus
             return (
               <div key={report.id} className="rounded-lg border border-border bg-card overflow-hidden">
                 <div
                   className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
                   onClick={() => setExpandedId(expanded ? null : report.id)}
                 >
-                  {/* 사유 뱃지 */}
                   <span
                     className="flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium text-white"
                     style={{ backgroundColor: report.reason === "욕설" ? "#EF4444" : report.reason === "스팸" ? "#F97316" : "#6B7280" }}
                   >
                     {report.reason}
                   </span>
-
-                  {/* 신고자 */}
                   <span className="text-xs text-muted-foreground flex-shrink-0">
                     {report.reporter_name ?? `#${report.reporter_id}`}
                   </span>
-
-                  {/* 대상 + 제목 */}
                   <span className="text-xs text-foreground flex-shrink-0">
                     {report.target_type === "post" ? "게시글" : "댓글"} #{report.target_id}
                   </span>
                   {report.target_title && (
-                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
-                      {report.target_title}
-                    </span>
+                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{report.target_title}</span>
                   )}
                   {!report.target_title && report.target_content && (
-                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">
-                      {report.target_content}
-                    </span>
+                    <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{report.target_content}</span>
                   )}
-
                   <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-                    {/* 상태 뱃지 */}
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[report.status]}`}>
-                      {STATUS_LABEL[report.status]}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[status]}`}>
+                      {STATUS_LABEL[status]}
                     </span>
-                    {/* 날짜 */}
                     <span className="text-xs text-muted-foreground">
                       {new Date(report.created_at).toLocaleDateString("ko-KR")}
                     </span>
@@ -250,7 +204,6 @@ export default function AdminReportsPage() {
 
                 {expanded && (
                   <div className="border-t border-border px-4 py-3 bg-muted/10 flex flex-col gap-3">
-                    {/* 신고된 게시글/댓글 본문 */}
                     <div className="rounded-md border border-border bg-card px-4 py-3 flex flex-col gap-1.5">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-semibold text-foreground">
@@ -274,7 +227,9 @@ export default function AdminReportsPage() {
                           {report.target_content}
                         </p>
                       ) : (
-                        <p className="text-xs text-muted-foreground italic">삭제되었거나 숨겨진 {report.target_type === "post" ? "게시글" : "댓글"}입니다.</p>
+                        <p className="text-xs text-muted-foreground italic">
+                          삭제되었거나 숨겨진 {report.target_type === "post" ? "게시글" : "댓글"}입니다.
+                        </p>
                       )}
                     </div>
 
@@ -298,13 +253,13 @@ export default function AdminReportsPage() {
                         <p className="whitespace-pre-wrap">{report.detail}</p>
                       </div>
                     )}
-                    {report.status === "pending" && (
+                    {status === "pending" && (
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           className="h-7 text-xs gap-1"
                           style={{ backgroundColor: "#B0232A" }}
-                          onClick={() => handleResolve(report.id)}
+                          onClick={() => handleResolve(report)}
                           disabled={actioning}
                         >
                           <CheckCircle className="h-3.5 w-3.5" />
