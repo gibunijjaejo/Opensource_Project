@@ -19,6 +19,7 @@ class User(Base):
     approval_token = Column(String(36), unique=True, nullable=True)
     role = Column(String(20), default="user", nullable=False)
     can_post = Column(Boolean, default=True, nullable=False)
+    can_comment = Column(Boolean, default=True, nullable=False)
 
     # 관계 설정 (문자열로 참조하여 에러 방지)
     histories = relationship("History", back_populates="user")

@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.api import auth, upload, courses, cart, history, users, admin, syllabus, posts, contact, professors, portfolio
 from app.database import engine, Base
-from app.models import user, course, professor, activity, post, report, notice, portfolio as portfolio_models  # noqa: F401 — Base 테이블 등록용
+from app.models import user, course, professor, activity, post, report, notice, portfolio as portfolio_models, contact as contact_model, admin_message  # noqa: F401 — Base 테이블 등록용
 
 # Root logger 설정 — Promtail/Loki에서 INFO 이상 로그 수집 가능하도록
 logging.basicConfig(

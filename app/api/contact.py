@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_student_id
 from app.models.user import User
+from app.models.contact import Contact
 from app.services.email_service import send_contact_email
 
 router = APIRouter(prefix="/api/v1/contact", tags=["Contact"])
@@ -24,6 +25,17 @@ def send_contact(
     user = db.query(User).filter(User.student_id == student_id).first()
     sender_name = user.name if user else "알 수 없음"
     sender_email_addr = user.email if user else ""
+
+    contact = Contact(
+        student_id=student_id,
+        subject=req.subject,
+        content=req.content,
+        sender_name=sender_name,
+        sender_email=sender_email_addr,
+    )
+    db.add(contact)
+    db.commit()
+
     background_tasks.add_task(
         send_contact_email,
         req.subject,

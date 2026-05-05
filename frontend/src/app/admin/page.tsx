@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Users, FileText, Flag, CheckCircle, XCircle, Loader2 } from "lucide-react"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
@@ -67,7 +68,7 @@ export default function AdminDashboard() {
           {/* 통계 카드 */}
           <div className="grid grid-cols-3 gap-4 max-w-2xl">
             <StatCard icon={Users} label="전체 사용자" value={health.stats.users} color="#3B82F6" />
-            <StatCard icon={FileText} label="전체 게시글" value={health.stats.posts} color="#8B5CF6" />
+            <StatCard icon={FileText} label="전체 게시글" value={health.stats.posts} color="#8B5CF6" actionHref="/admin/posts" actionLabel="보기" />
             <StatCard icon={Flag} label="미처리 신고" value={health.stats.pending_reports} color="#EF4444" />
           </div>
         </>
@@ -81,11 +82,15 @@ function StatCard({
   label,
   value,
   color,
+  actionHref,
+  actionLabel,
 }: {
   icon: React.ElementType
   label: string
   value: number
   color: string
+  actionHref?: string
+  actionLabel?: string
 }) {
   return (
     <div className="rounded-lg border border-border bg-card p-5">
@@ -94,6 +99,15 @@ function StatCard({
           <Icon className="h-4 w-4" style={{ color }} />
         </div>
         <p className="text-xs text-muted-foreground">{label}</p>
+        {actionHref && (
+          <Link
+            href={actionHref}
+            className="ml-auto text-xs font-medium hover:underline"
+            style={{ color }}
+          >
+            {actionLabel ?? "보기"}
+          </Link>
+        )}
       </div>
       <p className="text-2xl font-bold text-foreground">{value.toLocaleString()}</p>
     </div>
