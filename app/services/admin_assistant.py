@@ -14,6 +14,7 @@
 import json
 import os
 import subprocess
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -328,7 +329,9 @@ def query_prometheus(
         minutes: 최근 몇 분 (기본 60)
         step_seconds: 샘플링 간격 (기본 60초)
     """
-    end = int(datetime.utcnow().timestamp())
+    # POSIX epoch — datetime.utcnow().timestamp()는 컨테이너 TZ=Asia/Seoul과
+    # 충돌해 9시간 미래로 해석되는 함정이 있어 time.time() 사용.
+    end = int(time.time())
     start = end - minutes * 60
 
     try:
