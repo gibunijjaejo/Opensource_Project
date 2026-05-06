@@ -13,6 +13,13 @@ services:
     backend:
         volumes:
             - .:/app
+            # admin 챗 운영 어시스턴트가 호스트 docker ps/stats 호출하기 위함.
+            # ⚠️ dev 전용 — 컨테이너에서 호스트 docker 제어 가능하므로 prod에서는 사용 금지.
+            - /var/run/docker.sock:/var/run/docker.sock
+        environment:
+            # 컨테이너 네트워크에서 Prometheus는 service name으로 접근.
+            # (관측 스택이 안 떠있으면 도구가 connection refused 에러 반환 — 의도된 동작)
+            - PROMETHEUS_URL=http://prometheus:9090
         command:
             [
                 "uvicorn",
