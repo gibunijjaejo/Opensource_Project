@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Optional
 
 import httpx
@@ -50,10 +51,13 @@ class AIServiceError(Exception):
 
 # .env에서 GEMINI_API_KEY를 읽음. 사용자가 직접 키를 발급받아 .env에 채워넣어야 함.
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "MYKEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-GEMINI_URL = (
-    f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# 503/UNAVAILABLE/모델 deprecated 시 자동 폴백할 모델.
+FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite")
+GEMINI_URL_TEMPLATE = (
+    "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 )
+MAX_503_RETRIES = 1  # 같은 모델로 재시도 횟수 (그 후 폴백 모델로 전환)
 
 
 KIND_LABELS_KO = {
@@ -165,34 +169,7 @@ def evaluate_portfolio(
         },
     }
 
-    try:
-        with httpx.Client(timeout=60.0) as client:
-            resp = client.post(
-                GEMINI_URL,
-                params={"key": GEMINI_API_KEY},
-                json=payload,
-                headers={"Content-Type": "application/json"},
-            )
-    except httpx.TimeoutException:
-        raise AIServiceError(
-            code="timeout",
-            title="AI 응답 시간이 초과됐어요",
-            message="평가 서버가 60초 안에 응답하지 않았습니다.",
-            suggestion="잠시 후 다시 시도해주세요. 계속 발생하면 포트폴리오 내용을 줄여보세요.",
-            http_status=504,
-        )
-    except httpx.HTTPError as e:
-        raise AIServiceError(
-            code="network",
-            title="AI 평가 서버에 연결할 수 없어요",
-            message=f"네트워크 오류: {e}",
-            suggestion="잠시 후 다시 시도해주세요.",
-            http_status=502,
-        )
-
-    if resp.status_code != 200:
-        raise _classify_gemini_error(resp)
-
+    resp, used_model = _call_gemini_with_fallback(payload)
     data = resp.json()
 
     try:
@@ -239,8 +216,91 @@ def evaluate_portfolio(
         "suggestions": _coerce_str_list(result.get("suggestions")),
         "by_section": _coerce_str_dict(result.get("by_section")),
         "raw_response": text,
-        "model_name": GEMINI_MODEL,
+        "model_name": used_model,
     }
+
+
+def _is_unavailable(status_code: int, body_text: str) -> bool:
+    """503/UNAVAILABLE/모델 deprecated 여부. 폴백 트리거 판정용."""
+    if status_code in (503, 429):
+        return True
+    body_lower = body_text.lower()
+    if "unavailable" in body_lower or "high demand" in body_lower:
+        return True
+    # 신규 사용자에게 deprecated된 모델 (404 + "no longer available")도 폴백 트리거
+    if status_code == 404 and "no longer available" in body_lower:
+        return True
+    return False
+
+
+def _post_gemini(model: str, payload: dict) -> httpx.Response:
+    url = GEMINI_URL_TEMPLATE.format(model=model)
+    with httpx.Client(timeout=60.0) as client:
+        return client.post(
+            url,
+            params={"key": GEMINI_API_KEY},
+            json=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+
+def _call_gemini_with_fallback(payload: dict) -> tuple[httpx.Response, str]:
+    """메인 모델로 호출 → 503/UNAVAILABLE/모델 deprecated 시 폴백 모델로 자동 전환.
+
+    Returns:
+        (200 응답, 실제 사용된 모델명)
+    """
+    candidate_models = [GEMINI_MODEL]
+    if FALLBACK_MODEL and FALLBACK_MODEL != GEMINI_MODEL:
+        candidate_models.append(FALLBACK_MODEL)
+
+    last_resp: Optional[httpx.Response] = None
+    for model in candidate_models:
+        for attempt in range(MAX_503_RETRIES + 1):
+            try:
+                resp = _post_gemini(model, payload)
+            except httpx.TimeoutException:
+                raise AIServiceError(
+                    code="timeout",
+                    title="AI 응답 시간이 초과됐어요",
+                    message="평가 서버가 60초 안에 응답하지 않았습니다.",
+                    suggestion="잠시 후 다시 시도해주세요. 계속 발생하면 포트폴리오 내용을 줄여보세요.",
+                    http_status=504,
+                )
+            except httpx.HTTPError as e:
+                raise AIServiceError(
+                    code="network",
+                    title="AI 평가 서버에 연결할 수 없어요",
+                    message=f"네트워크 오류: {e}",
+                    suggestion="잠시 후 다시 시도해주세요.",
+                    http_status=502,
+                )
+
+            if resp.status_code == 200:
+                return resp, model
+
+            last_resp = resp
+            if not _is_unavailable(resp.status_code, resp.text):
+                # 503/UNAVAILABLE/모델 deprecated 외 오류는 즉시 분류해서 raise
+                raise _classify_gemini_error(resp)
+
+            logger.warning(
+                "Gemini %s 일시 오류 (%d, 시도 %d/%d): %s",
+                model, resp.status_code, attempt + 1, MAX_503_RETRIES + 1,
+                resp.text[:200],
+            )
+            time.sleep(1.0 + attempt)
+
+    # 모든 모델·재시도 실패 — 마지막 응답으로 분류
+    if last_resp is not None:
+        raise _classify_gemini_error(last_resp)
+    raise AIServiceError(
+        code="upstream_unavailable",
+        title="AI 서버가 일시적으로 불안정해요",
+        message="모든 모델 시도 실패",
+        suggestion="잠시 후 다시 시도해주세요.",
+        http_status=502,
+    )
 
 
 def _classify_gemini_error(resp: httpx.Response) -> AIServiceError:
