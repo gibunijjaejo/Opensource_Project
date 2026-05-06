@@ -1,3 +1,4 @@
+import logging
 import re
 import httpx
 from bs4 import BeautifulSoup
@@ -5,30 +6,32 @@ from rapidfuzz import process, fuzz
 from sqlalchemy.orm import Session
 from app.models.professor import Professor, ProfessorDetail
 
+logger = logging.getLogger(__name__)
+
 BASE_URL = "https://cs.sogang.ac.kr"
 LIST_URL = f"{BASE_URL}/cs/cs02_1_001.html"
 OLLAMA_URL = "http://host.docker.internal:11434/api/generate"
-OLLAMA_MODEL = "qwen3.5:4b"
+OLLAMA_MODEL = "exaone3.5:7.8b"
 
 
 DEFAULT_PROMPT = (
     "아래는 대학교수의 연구 소개입니다.\n"
-    "이 교수님이 어떤 분야를 연구하는지 대학생이 이해할 수 있도록 2문장으로 소개해주세요.\n\n"
+    "이 교수님이 어떤 연구를 하는지 설명하고, 어떤 관심사를 가진 학생에게 추천하는지 2문장으로 작성해주세요.\n\n"
     "규칙:\n"
-    "- 주어는 반드시 '이 교수님은'으로 시작\n"
+    "- 첫 문장: '이 교수님은 ~을 연구합니다.' 형식으로 연구 분야를 자연스럽게 소개\n"
+    "- 둘째 문장: '~에 관심 있는 학생에게 추천합니다.' 형식으로 마무리\n"
     "- 연구 주제를 나열하지 말고 하나의 큰 흐름으로 표현\n"
     "- 전문용어는 영어 그대로 유지\n"
-    "- 문장은 '~습니다'로 끝내기\n"
     "- 소개 문장만 출력 (부연 설명, 제목 없이)\n\n"
     "예시 출력: "
-    "이 교수님은 딥러닝 기반의 자연어 처리를 연구하십니다. "
-    "특히 언어 모델의 추론 능력을 높이는 방법에 집중하고 계십니다.\n\n"
+    "이 교수님은 딥러닝을 활용해 언어 모델이 더 잘 추론할 수 있도록 연구합니다. "
+    "AI와 자연어 처리에 관심 있는 학생에게 추천합니다.\n\n"
 )
 
 
 def _summarize_research_area(text: str, prompt_override: str | None = None) -> str | None:
     text = text[:300]
-    if not text or len(text) < 50:
+    if not text or len(text) < 10:
         return None
     base_prompt = prompt_override if prompt_override else DEFAULT_PROMPT
     prompt = base_prompt + text
@@ -48,7 +51,7 @@ def _summarize_research_area(text: str, prompt_override: str | None = None) -> s
             text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
             return text or None
     except Exception as e:
-        print(f"[Ollama] 요약 실패: {e}")
+        logger.warning("[Ollama] 요약 실패: %s", e)
         return None
 
 

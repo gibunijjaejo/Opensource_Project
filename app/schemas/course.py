@@ -8,7 +8,9 @@ class CourseDetailResponse(BaseModel):
     teaching_method: Optional[str] = None
     track_id: Optional[int] = None
     keyword: Optional[str] = None
+    overview: Optional[str] = None
     pdf_hash: Optional[str] = None
+    recommendation: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

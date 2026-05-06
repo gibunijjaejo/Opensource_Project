@@ -1,34 +1,25 @@
 # 로컬 개발용 override
-# 사용법: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# 사용법: make dev
 #
-# prod(docker-compose.yml)와 달라지는 부분만 선언합니다.
+# prod 대비 달라지는 것:
+#   - backend: 코드 볼륨 마운트 + --reload (핫리로드)
+#   - frontend: pnpm dev (HMR), NEXT_PUBLIC_API_URL=localhost
+#
+# DB: 팀 공용 서버(163.239.77.77) — 로컬 postgres 없음
+# Ollama: 호스트에서 별도 실행 (ollama serve), host.docker.internal:11434 자동 연결
 
 services:
-    # 로컬 PostgreSQL (테스트/스키마 실험 전용)
-    # 평소 개발은 팀 DB(163.239.77.77) 사용 — 이 컨테이너는 띄워지지만 백엔드가 붙지 않음
-    # 테스트 시: DB_HOST=db 로 override하거나 TEST_DATABASE_URL 환경변수 사용
-    db:
-        image: postgres:16-alpine
-        container_name: seoganpyo-db
-        restart: always
-        environment:
-            POSTGRES_USER: ${DB_USER:-postgres}
-            POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-            POSTGRES_DB: ${DB_NAME:-seoganpyo}
-        ports:
-            - "5432:5432"
-        volumes:
-            - postgres_dev_data:/var/lib/postgresql/data
-        healthcheck:
-            test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-seoganpyo}"]
-            interval: 10s
-            timeout: 5s
-            retries: 5
-
-    # 백엔드: --reload + 전체 코드 마운트 (핫리로드), 팀 DB 사용
+    # 백엔드: --reload + 전체 코드 마운트 (핫리로드)
     backend:
         volumes:
             - .:/app
+            # admin 챗 운영 어시스턴트가 호스트 docker ps/stats 호출하기 위함.
+            # ⚠️ dev 전용 — 컨테이너에서 호스트 docker 제어 가능하므로 prod에서는 사용 금지.
+            - /var/run/docker.sock:/var/run/docker.sock
+        environment:
+            # 컨테이너 네트워크에서 Prometheus는 service name으로 접근.
+            # (관측 스택이 안 떠있으면 도구가 connection refused 에러 반환 — 의도된 동작)
+            - PROMETHEUS_URL=http://prometheus:9090
         command:
             [
                 "uvicorn",
@@ -45,13 +36,14 @@ services:
             ocr-service:
                 condition: service_healthy
 
-    # 프론트엔드: 빌드 이미지 대신 pnpm dev (HMR)
+    # 프론트엔드: pnpm dev (HMR)
     frontend:
         build:
             context: ./frontend
             dockerfile: Dockerfile.dev
         environment:
-            - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+            - NEXT_PUBLIC_API_URL=http://localhost:8080
+            - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3001}
         volumes:
             - ./frontend:/app
             - /app/node_modules
@@ -59,6 +51,3 @@ services:
         command: ["pnpm", "dev"]
         ports:
             - "3000:3000"
-
-volumes:
-    postgres_dev_data:

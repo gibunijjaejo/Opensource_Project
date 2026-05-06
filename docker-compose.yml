@@ -20,18 +20,20 @@ services:
         restart: always
         ports:
             - "8001:8000"
-        volumes:
-            - paddle_model_cache:/root/.paddleocr
+        environment:
+            - MISTRAL_API_KEY=${MISTRAL_API_KEY}
         healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-            interval: 30s
-            timeout: 10s
+            test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+            interval: 10s
+            timeout: 5s
             retries: 5
-            start_period: 60s
+            start_period: 15s
 
     # FastAPI 백엔드
     backend:
-        build: .
+        build:
+            context: .
+            dockerfile: Dockerfile
         container_name: seoganpyo-api
         restart: always
         ports:
@@ -73,6 +75,7 @@ services:
             context: ./frontend
             args:
                 - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+                - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3001}
         container_name: seoganpyo-frontend
         restart: always
         ports:
@@ -86,6 +89,3 @@ services:
             timeout: 10s
             retries: 3
             start_period: 30s
-
-volumes:
-    paddle_model_cache:

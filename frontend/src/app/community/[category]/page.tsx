@@ -3,11 +3,12 @@
 import { useState, useEffect, use, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, MessageCircle, Trash2, BookOpen, Paperclip, X as XIcon, ThumbsUp, Pencil, Check } from "lucide-react"
+import { ArrowLeft, Plus, MessageCircle, Trash2, BookOpen, Paperclip, X as XIcon, ThumbsUp, Pencil, Check, Flag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { communityApi } from "@/lib/api"
 import type { Post, PostDetail } from "@/types"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 
 type SortMode = "recent" | "popular"
 
@@ -45,6 +46,13 @@ export default function CommunityPage({ params }: Props) {
 
   // 댓글 좋아요
   const [likedCommentIds, setLikedCommentIds] = useState<Set<number>>(new Set())
+
+  // 신고
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState<string>("")
+  const [reportDetail, setReportDetail] = useState<string>("")
+  const [isReporting, setIsReporting] = useState(false)
+  const [reportDone, setReportDone] = useState(false)
 
   // 댓글
   const [commentInput, setCommentInput] = useState("")
@@ -91,7 +99,9 @@ export default function CommunityPage({ params }: Props) {
       setShowForm(false)
       // 등록 후 바로 상세 표시
       handleSelectPost(post.id)
-    } catch {}
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "게시글 등록에 실패했습니다.")
+    }
     setIsSubmitting(false)
   }
 
@@ -120,7 +130,9 @@ export default function CommunityPage({ params }: Props) {
       const comment = await communityApi.createComment(decodedCategory, selectedPost.id, commentInput)
       setSelectedPost((prev) => prev ? { ...prev, comments: [...prev.comments, comment], comment_count: prev.comment_count + 1 } : prev)
       setCommentInput("")
-    } catch {}
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "댓글 등록에 실패했습니다.")
+    }
   }
 
   const handleDeleteComment = async (commentId: number) => {
@@ -155,6 +167,19 @@ export default function CommunityPage({ params }: Props) {
     setIsEditSaving(false)
   }
 
+  const handleReport = async () => {
+    if (!selectedPost || !reportReason) return
+    setIsReporting(true)
+    try {
+      await communityApi.reportPost(decodedCategory, selectedPost.id, reportReason, reportDetail.trim() || undefined)
+      setReportDone(true)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "신고에 실패했습니다."
+      alert(msg)
+    }
+    setIsReporting(false)
+  }
+
   const handleToggleCommentLike = async (commentId: number) => {
     if (!selectedPost) return
     try {
@@ -175,27 +200,33 @@ export default function CommunityPage({ params }: Props) {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <div className="flex h-14 items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link href="/profile" className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-3.5 w-3.5" />
-                <span>프로필</span>
-              </Link>
-              <span className="text-muted-foreground/40">/</span>
-              <div className="flex items-center gap-1.5">
-                <BookOpen className="h-3.5 w-3.5" style={{ color: "#B0232A" }} />
-                <span className="text-xs font-medium text-foreground">{decodedCategory}</span>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              className="h-8 gap-1.5 text-xs"
-              style={{ backgroundColor: "#B0232A" }}
-              onClick={() => { setShowForm(true); setSelectedPost(null) }}
+          <div className="flex h-14 items-center relative">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Plus className="h-3.5 w-3.5" />
-              글쓰기
-            </Button>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>이전</span>
+            </button>
+            <Link
+              href="/"
+              className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+            >
+              <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
+            </Link>
+            <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
+              <Button
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                style={{ backgroundColor: "#B0232A" }}
+                onClick={() => { setShowForm(true); setSelectedPost(null) }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                글쓰기
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -399,9 +430,9 @@ export default function CommunityPage({ params }: Props) {
                       </a>
                     </div>
                   )}
-                  {/* 좋아요 버튼 */}
+                  {/* 좋아요 + 신고 버튼 */}
                   {!isEditing && (
-                    <div className="mt-4 pt-4 border-t border-border">
+                    <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
                       <button
                         onClick={() => handleToggleLike(selectedPost.id)}
                         className={`flex items-center gap-1.5 text-sm font-medium transition-colors rounded-full px-3 py-1.5 border ${
@@ -414,6 +445,15 @@ export default function CommunityPage({ params }: Props) {
                         <ThumbsUp className="h-3.5 w-3.5" />
                         {selectedPost.likes}
                       </button>
+                      {myStudentId !== selectedPost.student_id && (
+                        <button
+                          onClick={() => { setShowReportModal(true); setReportReason(""); setReportDetail(""); setReportDone(false) }}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 transition-colors"
+                        >
+                          <Flag className="h-3.5 w-3.5" />
+                          신고
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -479,6 +519,72 @@ export default function CommunityPage({ params }: Props) {
           </div>
         </div>
       </main>
+
+      {/* 신고 모달 */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-sm rounded-lg border border-border bg-card p-6 flex flex-col gap-4">
+            {reportDone ? (
+              <>
+                <p className="text-sm font-semibold text-foreground text-center">신고가 접수되었습니다.</p>
+                <p className="text-xs text-muted-foreground text-center">검토 후 조치하겠습니다.</p>
+                <Button
+                  size="sm"
+                  className="w-full text-xs"
+                  style={{ backgroundColor: "#B0232A" }}
+                  onClick={() => setShowReportModal(false)}
+                >
+                  확인
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-foreground">게시글 신고</h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-muted-foreground hover:text-foreground">
+                    <XIcon className="h-4 w-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">신고 사유를 선택해주세요.</p>
+                <div className="flex flex-col gap-2">
+                  {(["욕설", "스팸", "기타"] as const).map((reason) => (
+                    <label key={reason} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="report-reason"
+                        value={reason}
+                        checked={reportReason === reason}
+                        onChange={() => setReportReason(reason)}
+                        className="accent-[#B0232A]"
+                      />
+                      <span className="text-sm text-foreground">{reason}</span>
+                    </label>
+                  ))}
+                </div>
+                <textarea
+                  placeholder="상세 사유를 입력해주세요. (선택)"
+                  value={reportDetail}
+                  onChange={(e) => setReportDetail(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring text-foreground placeholder:text-muted-foreground"
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowReportModal(false)}>취소</Button>
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    style={{ backgroundColor: "#B0232A" }}
+                    onClick={handleReport}
+                    disabled={!reportReason || isReporting}
+                  >
+                    {isReporting ? "신고 중..." : "신고하기"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

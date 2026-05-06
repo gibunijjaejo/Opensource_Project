@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Upload, CheckCircle, GraduationCap, FileImage, BookOpen, X, Pencil, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 
 const START_YEAR = 2020
 const SEMESTERS = [1, 2] as const
@@ -114,16 +115,24 @@ export default function TimetablePage() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <div className="flex h-14 items-center gap-3">
-            <Link
-              href="/"
+          <div className="flex h-14 items-center relative">
+            <button
+              onClick={() => router.back()}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>대시보드</span>
+              <span>이전</span>
+            </button>
+            <Link
+              href="/"
+              className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+            >
+              <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
             </Link>
-            <span className="text-border text-muted-foreground/40">/</span>
-            <span className="text-xs text-foreground font-medium">시간표 인식</span>
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>
@@ -174,7 +183,7 @@ export default function TimetablePage() {
                 <div key={key} className="flex flex-col gap-2">
                   <div className="flex justify-center">
                     <span
-                      className="px-6 py-1.5 rounded text-sm font-medium text-foreground"
+                      className="px-6 py-1.5 rounded text-sm font-medium text-white"
                       style={{ backgroundColor: "#B0232A" }}
                     >
                       {semester}학기

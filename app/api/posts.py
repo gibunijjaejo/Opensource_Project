@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_student_id
 from app.models.post import Post, Comment, PostLike, CommentLike
-from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse, PostUpdate
+from app.models.user import User
+from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse, PostUpdate, ReportCreate
+from app.services import report_service
 
 UPLOAD_DIR = "static/uploads/posts"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -65,6 +67,10 @@ async def create_post(
     student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ):
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user or not user.can_post:
+        raise HTTPException(status_code=403, detail="게시글 작성이 제한된 사용자입니다.")
+
     file_path = None
     file_name = None
     if file and file.filename:
@@ -135,6 +141,20 @@ def delete_post(
     db.commit()
 
 
+# ── 신고 ──────────────────────────────────────────────
+
+@router.post("/{category}/{post_id}/report", status_code=201, response_model=dict)
+def report_post(
+    category: str,
+    post_id: int,
+    req: ReportCreate,
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+):
+    report_service.create_report(db, student_id, post_id, category, req.reason, req.detail)
+    return {"message": "신고가 접수되었습니다."}
+
+
 # ── 좋아요 ────────────────────────────────────────────
 
 @router.post("/{category}/{post_id}/like", response_model=LikeResponse)
@@ -171,6 +191,9 @@ def create_comment(
     student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ):
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user or not user.can_comment:
+        raise HTTPException(status_code=403, detail="댓글 작성이 제한된 사용자입니다.")
     post = db.query(Post).filter(Post.id == post_id, Post.category == category).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")

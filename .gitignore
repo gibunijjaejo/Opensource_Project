@@ -86,6 +86,8 @@ node_modules/
 /dist
 .next/
 out/
+*.tsbuildinfo
+frontend/next-env.d.ts
 .env.local
 .env.development.local
 .env.test.local
@@ -121,6 +123,7 @@ Opensource_Project/
 ### 테스트 아티팩트 ###
 test-results/
 reports/
+!frontend/src/app/admin/reports/
 frontend/playwright-report/
 frontend/test-results/
 
@@ -129,3 +132,4 @@ node_modules/
 package.json
 pnpm-lock.yaml
 package-lock.json
+*.tsbuildinfo

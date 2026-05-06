@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut } from "lucide-react"
+import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
 import type { Course } from "@/lib/constants/course-data"
@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const [userName, setUserName] = useState<string>("")
   const [histories, setHistories] = useState<HistoryItem[]>([])
   const [isLoadingAll, setIsLoadingAll] = useState(false)
+  const [userInterests, setUserInterests] = useState<string[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem("access_token")
@@ -61,7 +62,11 @@ export default function DashboardPage() {
       .finally(() => setIsLoadingAll(false))
 
     usersApi.me()
-      .then((u) => setUserName(u.name))
+      .then((u) => {
+        setUserName(u.name)
+        const interests = u.interests ? u.interests.split(",").filter(Boolean) : []
+        setUserInterests(interests)
+      })
       .catch(() => {})
     cartApi.get()
       .then(setCartItems)
@@ -112,9 +117,9 @@ export default function DashboardPage() {
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
           <div className="flex h-14 items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
-              <span className="hidden sm:inline text-xs text-muted-foreground font-mono border-l border-border pl-2.5 ml-0.5">
+              <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
+              <span className="hidden sm:inline text-xs text-muted-foreground border-l border-border pl-2.5 ml-0.5">
                 {getCurrentSemester().label}
               </span>
             </div>
@@ -160,7 +165,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
             <Link
               href="/profile"
               className="group rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow"
@@ -207,7 +212,79 @@ export default function DashboardPage() {
               </p>
               <p className="mt-1 text-xs text-muted-foreground">졸업 요건 확인</p>
             </Link>
+            <Link
+              href="/professors"
+              className="group rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4" style={{ color: "#B0232A" }} />
+                  <span className="text-xs font-medium text-muted-foreground">교수님</span>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+              </div>
+              <p className="text-sm font-medium text-foreground">프로필 보러가기</p>
+              <p className="mt-1 text-xs text-muted-foreground">연구 분야 탐색</p>
+            </Link>
           </div>
+
+          {/* Portfolio (AI 평가) Section */}
+          <Link
+            href="/portfolio"
+            className="group rounded-lg border border-border bg-card p-5 hover:shadow-sm transition-shadow flex items-center gap-4"
+          >
+            <div
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg"
+              style={{ backgroundColor: "rgba(176, 35, 42, 0.1)" }}
+            >
+              <Sparkles className="h-5 w-5" style={{ color: "#B0232A" }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-foreground">내 포트폴리오</h2>
+                <span
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(176, 35, 42, 0.1)", color: "#B0232A" }}
+                >
+                  AI 평가
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                교내·교외활동, 자격증, 수상내역, 프로젝트를 기록하고 AI에게 진로 평가를 받으세요.
+              </p>
+            </div>
+            <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+          </Link>
+
+          {/* Community Board Section */}
+          <section className="rounded-lg border border-border bg-muted/30 p-6">
+            <h2 className="text-sm font-semibold text-foreground mb-1">내 커뮤니티 게시판</h2>
+            <p className="text-xs text-muted-foreground mb-4">선택한 분야의 게시판으로 바로 이동할 수 있습니다.</p>
+            {userInterests.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border px-6 py-8 text-center">
+                <p className="text-sm text-muted-foreground">관심 분야를 선택하면 게시판이 표시됩니다.</p>
+                <Link
+                  href="/profile"
+                  className="text-xs text-muted-foreground/70 mt-1 inline-block hover:text-foreground transition-colors"
+                >
+                  프로필에서 설정하기 →
+                </Link>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {userInterests.map((item) => (
+                  <Link
+                    key={item}
+                    href={`/community/${encodeURIComponent(item)}`}
+                    className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
+                    style={{ borderColor: "#B0232A", color: "#B0232A" }}
+                  >
+                    {item} →
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
 
           {/* Wishlist Section */}
           <section>

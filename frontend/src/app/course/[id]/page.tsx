@@ -25,6 +25,15 @@ import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { coursesApi } from "@/lib/api";
 import type { Course } from "@/types";
 
+// ─── 트랙명 매핑 ─────────────────────────────────────────────────────────────
+const TRACK_NAMES: Record<number, string> = {
+    1: "데이터 분석", 2: "데이터 관리", 3: "백엔드",
+    4: "프론트엔드", 5: "웹/앱", 6: "AI",
+    7: "DevOps", 8: "네트워크", 9: "보안",
+    10: "QA", 11: "게임", 12: "임베디드",
+    13: "IT컨설팅", 14: "컴퓨터 교육",
+}
+
 // ─── AI 연구분야 요약 카드 ────────────────────────────────────────────────────
 // 왼→오른 reveal 애니메이션 + 흐르는 그라디언트 테두리
 function ResearchAreaCard({ summary }: { summary: string }) {
@@ -89,6 +98,59 @@ function ResearchAreaCard({ summary }: { summary: string }) {
     );
 }
 
+// ─── AI 강의계획서 요약 박스 ──────────────────────────────────────────────────
+function SyllabusAiCard({ children }: { children: React.ReactNode }) {
+    const [visible, setVisible] = useState(false);
+    useEffect(() => {
+        const t = setTimeout(() => setVisible(true), 30);
+        return () => clearTimeout(t);
+    }, []);
+
+    return (
+        <>
+            <style>{`
+        @keyframes ai-border-flow {
+          0%   { background-position: 0% 50%; }
+          50%  { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes ai-reveal {
+          from { clip-path: inset(0 100% 0 0 round 8px); }
+          to   { clip-path: inset(0 0% 0 0 round 8px); }
+        }
+        .ai-border-wrap {
+          background: linear-gradient(90deg, #7c3aed, #a855f7, #6366f1, #a855f7, #7c3aed);
+          background-size: 300% 300%;
+          animation: ai-border-flow 3s ease infinite;
+        }
+        .ai-card-reveal {
+          animation: ai-reveal 0.45s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+      `}</style>
+            <div className={visible ? "ai-card-reveal rounded-lg" : "rounded-lg opacity-0"}>
+            <div className="ai-border-wrap rounded-lg p-[2px]">
+                <div className="rounded-lg bg-card p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <span
+                            className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium"
+                            style={{
+                                background: "linear-gradient(135deg, #7c3aed22, #a855f722)",
+                                color: "#a855f7",
+                            }}
+                        >
+                            <Sparkles className="h-2.5 w-2.5" />
+                            AI 요약
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/70">강의계획서</span>
+                    </div>
+                    <div className="flex flex-col gap-3">{children}</div>
+                </div>
+            </div>
+        </div>
+        </>
+    );
+}
+
 // ─── 페이지 타입 ──────────────────────────────────────────────────────────────
 interface Props {
     params: Promise<{ id: string }>;
@@ -136,18 +198,21 @@ export default function CourseDetailPage({ params }: Props) {
             {/* ── 상단 네비게이션 헤더 ────────────────────────────────────────── */}
             <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
                 <div className="mx-auto max-w-3xl px-4 sm:px-6">
-                    <div className="flex h-14 items-center gap-3">
-                        <Link
-                            href="/"
+                    <div className="flex h-14 items-center relative">
+                        <button
+                            onClick={() => router.back()}
                             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                             <ArrowLeft className="h-3.5 w-3.5" />
-                            <span>대시보드</span>
+                            <span>이전</span>
+                        </button>
+                        <Link
+                            href="/"
+                            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+                        >
+                            <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+                            <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
                         </Link>
-                        <span className="text-border text-muted-foreground/40">/</span>
-                        <span className="text-xs text-muted-foreground font-mono">
-                            {course?.course_code ?? id}
-                        </span>
                         <div className="ml-auto">
                             <ThemeToggle />
                         </div>
@@ -170,13 +235,13 @@ export default function CourseDetailPage({ params }: Props) {
                         <p className="text-sm text-muted-foreground">
                             과목을 찾을 수 없습니다.
                         </p>
-                        <Link
-                            href="/"
+                        <button
+                            onClick={() => router.back()}
                             className="mt-2 inline-flex items-center gap-1 text-xs hover:underline"
                             style={{ color: "#B0232A" }}
                         >
-                            <ArrowLeft className="h-3 w-3" /> 대시보드로 돌아가기
-                        </Link>
+                            <ArrowLeft className="h-3 w-3" /> 이전으로 돌아가기
+                        </button>
                     </div>
                 ) : (
                     // 과목 상세
@@ -209,6 +274,14 @@ export default function CourseDetailPage({ params }: Props) {
                                             }}
                                         >
                                             영어강의
+                                        </span>
+                                    )}
+                                    {course.details?.track_id && TRACK_NAMES[course.details.track_id] && (
+                                        <span
+                                            className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                                            style={{ backgroundColor: "#22c55e15", color: "#16a34a" }}
+                                        >
+                                            {TRACK_NAMES[course.details.track_id]}
                                         </span>
                                     )}
                                 </div>
@@ -306,45 +379,50 @@ export default function CourseDetailPage({ params }: Props) {
                                                     강의계획서 보러가기
                                                 </span>
                                             )}
-                                            {course.details?.required_skills && (
-                                                <div className="rounded-md border border-border bg-card p-4">
-                                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                                                        필요 역량
+                                            {course.details?.recommendation && (
+                                                <div
+                                                    className="rounded-md border px-4 py-3"
+                                                    style={{ borderColor: "#B0232A", backgroundColor: "rgba(176,35,42,0.05)" }}
+                                                >
+                                                    <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: "#B0232A" }}>
+                                                        AI 추천
                                                     </p>
-                                                    <p className="text-sm text-foreground">
-                                                        {course.details.required_skills}
-                                                    </p>
+                                                    <p className="text-sm text-foreground">{course.details.recommendation}</p>
                                                 </div>
                                             )}
-                                            {course.details?.evaluation_method && (
-                                                <div className="rounded-md border border-border bg-card p-4">
-                                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                                                        평가 방식
-                                                    </p>
-                                                    <p className="text-sm text-foreground">
-                                                        {course.details.evaluation_method}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {course.details?.teaching_method && (
-                                                <div className="rounded-md border border-border bg-card p-4">
-                                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                                                        수업 방식
-                                                    </p>
-                                                    <p className="text-sm text-foreground">
-                                                        {course.details.teaching_method}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {course.details?.keyword && (
-                                                <div className="rounded-md border border-border bg-card p-4">
-                                                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                                                        키워드
-                                                    </p>
-                                                    <p className="text-sm text-foreground">
-                                                        {course.details.keyword}
-                                                    </p>
-                                                </div>
+                                            {(course.details?.required_skills || course.details?.evaluation_method || course.details?.teaching_method || course.details?.keyword) && (
+                                                <SyllabusAiCard>
+                                                    {course.details?.overview && (
+                                                        <div>
+                                                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">강의 개요</p>
+                                                            <p className="text-sm text-foreground">{course.details.overview}</p>
+                                                        </div>
+                                                    )}
+                                                    {course.details?.required_skills && (
+                                                        <div>
+                                                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">필요 역량</p>
+                                                            <p className="text-sm text-foreground">{course.details.required_skills}</p>
+                                                        </div>
+                                                    )}
+                                                    {course.details?.evaluation_method && (
+                                                        <div>
+                                                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">평가 방식</p>
+                                                            <p className="text-sm text-foreground">{course.details.evaluation_method}</p>
+                                                        </div>
+                                                    )}
+                                                    {course.details?.teaching_method && (
+                                                        <div>
+                                                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">수업 방식</p>
+                                                            <p className="text-sm text-foreground">{course.details.teaching_method}</p>
+                                                        </div>
+                                                    )}
+                                                    {course.details?.keyword && (
+                                                        <div>
+                                                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">키워드</p>
+                                                            <p className="text-sm text-foreground">{course.details.keyword}</p>
+                                                        </div>
+                                                    )}
+                                                </SyllabusAiCard>
                                             )}
                                         </div>
                                 </div>

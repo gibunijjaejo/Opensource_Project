@@ -154,7 +154,7 @@ sleep 60 && curl -s http://localhost:8001/health
 ## 5. 자주 발생하는 장애 사례
 
 ### CASE 1. 로그인/회원가입이 안 될 때
-**원인:** `users` 테이블 컬럼 누락
+**원인 A:** `users` 테이블 컬럼 누락 (interests, target_careers)
 ```bash
 docker compose exec -T seoganpyo-api python -c "
 from app.database import engine
@@ -166,6 +166,19 @@ with engine.connect() as conn:
     print('done')
 "
 ```
+
+**원인 B:** `users.is_approved` 컬럼 누락 — 기존 DB에 컬럼이 없으면 `if not user.is_approved` 체크 시 AttributeError/컬럼 오류 발생, 기존 사용자 전원 로그인 불가
+```bash
+docker compose exec -T seoganpyo-api python -c "
+from app.database import engine
+import sqlalchemy as sa
+with engine.connect() as conn:
+    conn.execute(sa.text(\"ALTER TABLE users ADD COLUMN IF NOT EXISTS is_approved BOOLEAN NOT NULL DEFAULT TRUE\"))
+    conn.commit()
+    print('done')
+"
+```
+> ⚠️ `DEFAULT TRUE` 로 설정해야 기존 사용자의 로그인이 유지됩니다. 신규 가입자는 `DEFAULT FALSE`(이메일 인증 후 승인)이지만, 이미 가입된 계정은 즉시 로그인 가능 상태여야 합니다.
 
 ### CASE 2. 게시글 등록이 안 될 때
 **원인:** `posts` 테이블 컬럼 누락
@@ -278,7 +291,94 @@ python3 scripts/analyze_logs.py \
 
 ---
 
-## 8. 서비스 명령어
+## 8. 모니터링
+
+### 8-1. 관리자 페이지 모니터링
+
+`http://<VDI_IP>:3000/admin` 에서 실시간 상태 확인 가능.
+
+| 메뉴 | 경로 | 내용 |
+|---|---|---|
+| 대시보드 | `/admin` | 서버 상태, 유저 수, 게시글 수, 미처리 신고 수 |
+| 모니터링 | `/admin/monitoring` | API 서버 및 DB 연결 상태 확인 |
+| 사용자 관리 | `/admin/users` | 유저 목록, 게시 권한 토글, 탈퇴 처리 |
+| 신고 관리 | `/admin/reports` | 신고 내역 확인, 처리/기각 |
+| 교수 데이터 | `/admin/professors` | 크롤링 실행, 연구분야 요약 생성 |
+
+관리자 계정 로그인: `noey@sogang.ac.kr` (또는 role=admin 계정)
+
+---
+
+### 8-2. 헬스체크 API
+
+```bash
+# 서버 상태 + 통계 (관리자 토큰 필요)
+TOKEN="<admin_token>"
+curl -s http://localhost:8080/admin/health \
+  -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+
+# 응답 예시
+# {
+#   "status": "ok",
+#   "admin": "심하연",
+#   "stats": { "users": 31, "posts": 42, "pending_reports": 2 }
+# }
+```
+
+---
+
+### 8-3. 관측 스택 (Loki + Promtail + Grafana)
+
+> 평소에는 띄우지 않음. 로그 분석이 필요할 때만 옵트인.
+
+```bash
+# 관측 스택 시작
+make up-obs
+
+# Grafana 접속: http://localhost:3001
+# 기본 계정: admin / admin (GF_SECURITY_ADMIN_* 환경변수로 변경 가능)
+
+# 관측 스택 종료
+make down-obs
+
+# 관측 스택 로그 확인
+make logs-obs
+```
+
+**Loki 로그 쿼리 예시 (Grafana Explore):**
+```
+{container="seoganpyo-api"} |= "ERROR"
+{container="seoganpyo-api"} |= "502"
+{container="seoganpyo-frontend"} |= "error"
+```
+
+---
+
+### 8-4. Ollama (교수 연구분야 요약)
+
+```bash
+# Ollama 서버 상태 확인
+curl http://localhost:11434
+
+# 설치된 모델 확인
+ollama list
+
+# 서버 실행 (백그라운드)
+ollama serve &
+
+# 컨테이너 내부에서 Ollama 연결 테스트
+docker compose exec seoganpyo-api python3 -c "
+import httpx
+r = httpx.get('http://host.docker.internal:11434', timeout=5)
+print('연결:', r.status_code)
+"
+```
+
+> Ollama가 실행 중이지 않으면 `/admin/professors/{id}/summarize` 호출 시 502 반환.
+
+---
+
+## 9. 서비스 명령어
 
 ```bash
 # 로컬 개발 (--reload + HMR + 팀 DB 연결)

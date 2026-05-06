@@ -1,5 +1,5 @@
 """
-Docker 컨테이너 에러 로그 수집 → Claude Code(Agent SDK) 분석 → Discord Embed 카드 전송
+Docker 컨테이너 에러 로그 수집 → Ollama 로컬 LLM 분석 → Discord Embed 카드 전송
 
 사용법:
   python3 scripts/analyze_logs.py \
@@ -9,9 +9,10 @@ Docker 컨테이너 에러 로그 수집 → Claude Code(Agent SDK) 분석 → D
     --webhook "$DISCORD_WEBHOOK" \
     --containers seoganpyo-api seoganpyo-frontend
 
-팀서버에 Claude Code가 설치·인증되어 있어야 합니다:
-  sudo npm install -g @anthropic-ai/claude-code
-  sudo -u jenkins claude auth login
+호스트(또는 Jenkins 서버)에 Ollama가 설치되고 모델이 받아져 있어야 합니다:
+  brew install ollama  # 또는 https://ollama.com
+  ollama serve &
+  ollama pull exaone3.5:7.8b
 """
 
 import argparse
@@ -21,6 +22,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+import httpx
 
 # 프로젝트 루트를 sys.path에 추가
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -34,13 +37,6 @@ except ImportError:
 
 # ── 상수 ────────────────────────────────────────────────────────────────────
 
-# 필터링할 에러 키워드 (대소문자 무관)
-ERROR_KEYWORDS = [
-    "error", "critical", "exception", "traceback",
-    "fatal", "fail", "panic", "sqlalchemy",
-    "connectionerror", "timeout",
-]
-
 # Discord Embed 색상
 COLOR_FAIL    = 0xE74C3C  # 빨간색
 COLOR_SUCCESS = 0x2ECC71  # 초록색
@@ -48,14 +44,14 @@ COLOR_SUCCESS = 0x2ECC71  # 초록색
 KST = timezone(timedelta(hours=9))
 
 
-# ── 로그 수집 & 필터링 ────────────────────────────────────────────────────
+# ── 로그 수집 ────────────────────────────────────────────────────────────
 
-def collect_logs(containers: list[str], tail: int = 200) -> str:
+def collect_logs(containers: list[str], tail: int = 300) -> str:
     """
-    지정한 Docker 컨테이너에서 최근 로그를 수집하고
-    에러 관련 라인만 필터링해서 반환합니다.
+    지정한 Docker 컨테이너에서 최근 로그를 전체 수집합니다.
+    필터링 없이 원본 그대로 전달해 Claude가 문맥을 파악할 수 있게 합니다.
     """
-    filtered_lines = []
+    sections = []
 
     for container in containers:
         try:
@@ -65,29 +61,28 @@ def collect_logs(containers: list[str], tail: int = 200) -> str:
                 text=True,
                 timeout=15,
             )
-            # docker logs는 stderr에도 출력하므로 둘 다 합칩니다
-            raw = result.stdout + result.stderr
+            raw = (result.stdout + result.stderr).strip()
         except (subprocess.TimeoutExpired, FileNotFoundError):
             raw = ""
 
-        for line in raw.splitlines():
-            line_lower = line.lower()
-            if any(kw in line_lower for kw in ERROR_KEYWORDS):
-                filtered_lines.append(f"[{container}] {line.strip()}")
+        if raw:
+            sections.append(f"=== {container} ===\n{raw}")
 
-    return "\n".join(filtered_lines[-150:])  # 최대 150줄로 제한
+    return "\n\n".join(sections)
 
 
 # ── AI 분석 ──────────────────────────────────────────────────────────────
 
 ANALYSIS_SYSTEM_PROMPT = (
     "당신은 백엔드 서비스 장애 분석 전문가입니다. "
-    "주어진 에러 로그를 보고 반드시 아래 4개 항목을 각각 한국어로 간결하게 작성하세요. "
+    "주어진 로그는 필터링 없이 수집한 전체 원본입니다. 문맥을 파악해 실제 장애 원인을 찾아주세요. "
+    "참고: seoganpyo-ocr 컨테이너의 'C++ Traceback', 'FatalError: Termination signal'은 "
+    "PaddleOCR 정상 시작 시 항상 출력되는 노이즈입니다. 실제 에러 원인으로 보지 마세요. "
     "각 항목은 반드시 '[항목명]' 태그로 시작하세요."
 )
 
 ANALYSIS_USER_TEMPLATE = """\
-에러 로그:
+전체 컨테이너 로그:
 {logs}
 
 위 로그를 분석하여 정확히 아래 형식으로 답하세요 (다른 내용은 포함하지 마세요):
@@ -99,37 +94,34 @@ ANALYSIS_USER_TEMPLATE = """\
 """
 
 
-def analyze_with_claude(filtered_logs: str) -> str:
-    """Claude Code Agent SDK로 에러 로그를 분석합니다.
-    팀서버에 claude CLI가 설치·인증되어 있어야 합니다:
-      npm install -g @anthropic-ai/claude-code
-      claude auth login
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434/api/generate")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "exaone3.5:7.8b")
+
+
+def analyze_with_ollama(filtered_logs: str) -> str:
+    """Ollama 로컬 LLM(exaone3.5:7.8b)으로 에러 로그를 분석합니다.
+
+    호스트(또는 Jenkins 서버)에 Ollama 서버가 떠 있고 모델이 받아져 있어야 함.
+    20000자 입력은 약 6000~10000 토큰. num_ctx=16384로 충분.
     """
+    prompt = (
+        ANALYSIS_SYSTEM_PROMPT
+        + "\n\n"
+        + ANALYSIS_USER_TEMPLATE.format(logs=filtered_logs[:20000])
+    )
     try:
-        import anyio
-        from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
-
-        prompt = (
-            ANALYSIS_SYSTEM_PROMPT
-            + "\n\n"
-            + ANALYSIS_USER_TEMPLATE.format(logs=filtered_logs[:6000])
-        )
-
-        async def _run() -> str:
-            async for message in query(
-                prompt=prompt,
-                options=ClaudeAgentOptions(max_turns=1),
-            ):
-                if isinstance(message, ResultMessage):
-                    return message.result
-            return "(분석 결과 없음)"
-
-        return anyio.run(_run)
-
-    except ImportError:
-        return "(분석 실패: claude-agent-sdk 미설치 — pip install claude-agent-sdk)"
+        with httpx.Client(timeout=300) as client:
+            res = client.post(OLLAMA_URL, json={
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"num_ctx": 16384},
+            })
+            res.raise_for_status()
+            return res.json().get("response", "").strip() or "(분석 결과 없음)"
     except Exception as e:
-        return f"(Claude Code 분석 오류: {e})"
+        print(f"[Ollama] 로그 분석 실패: {e}", file=sys.stderr)
+        return f"(Ollama 분석 오류: {e})"
 
 
 
@@ -289,9 +281,9 @@ def main():
     filtered_logs = collect_logs(args.containers)
 
     if filtered_logs:
-        print(f"[INFO] 필터링된 에러 라인 수: {len(filtered_logs.splitlines())}")
+        print(f"[INFO] 수집된 로그 라인 수: {len(filtered_logs.splitlines())}")
         print("[INFO] Claude AI 분석 중...")
-        analysis = analyze_with_claude(filtered_logs)
+        analysis = analyze_with_ollama(filtered_logs)
     else:
         print("[INFO] 에러 로그 없음 — 분석 생략")
         filtered_logs = ""

@@ -6,8 +6,10 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft, GraduationCap, CheckCircle2, BookOpen, Clock,
-  Loader2, Plus, Pencil, Trash2, X, Search, RotateCcw,
+  Loader2, Plus, Pencil, Trash2, X, Search, RotateCcw, ArrowUpDown,
+  CalendarPlus,
 } from "lucide-react"
+import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { historyApi, coursesApi } from "@/lib/api"
 import type { HistoryItem, Course } from "@/types"
 
@@ -28,6 +30,23 @@ type ModalState = {
   initIsRetake?: boolean
 }
 
+const SEASONAL_YEARS = Array.from({ length: 7 }, (_, i) => 2020 + i)
+
+const semesterDisplay = (s: number | null): string => {
+  if (s === 3) return "하계학기"
+  if (s === 4) return "동계학기"
+  if (s == null) return ""
+  return `${s}학기`
+}
+
+const isSeasonal = (s: number | null) => s === 3 || s === 4
+
+// 학사 일정 순서: 1학기(봄) → 하계(3) → 2학기(가을) → 동계(4)
+const SEMESTER_RANK: Record<number, number> = { 1: 0, 3: 1, 2: 2, 4: 3 }
+const semesterRank = (s: number | null) => (s == null ? 99 : SEMESTER_RANK[s] ?? s)
+const chronoKey = (year: number | null, semester: number | null) =>
+  (year ?? 0) * 4 + semesterRank(semester)
+
 export default function GraduationPage() {
   const router = useRouter()
   const [histories, setHistories] = useState<HistoryItem[]>([])
@@ -38,6 +57,10 @@ export default function GraduationPage() {
 
   // ── 모달 상태 ──────────────────────────────────────────
   const [modal, setModal] = useState<ModalState | null>(null)
+  const [seasonalPicker, setSeasonalPicker] = useState<{
+    year: number
+    semester: 3 | 4
+  } | null>(null)
   const [modalCourses, setModalCourses] = useState<Course[]>([])
   const [modalSearch, setModalSearch] = useState("")
   const [modalSelected, setModalSelected] = useState<Course | null>(null)
@@ -47,6 +70,9 @@ export default function GraduationPage() {
 
   // ── 삭제 확인 상태 ─────────────────────────────────────
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+
+  // ── 정렬 방향 (기본: 내림차순) ─────────────────────────
+  const [sortDesc, setSortDesc] = useState(true)
 
   // ── 초기 로드 + OCR 폴링 ───────────────────────────────
   useEffect(() => {
@@ -124,12 +150,47 @@ export default function GraduationPage() {
       if (modal.mode === "edit" && modal.historyId != null) {
         await historyApi.remove(modal.historyId)
       }
+
+      const targetYear = modal.year ?? new Date().getFullYear()
+      const targetSemester = modal.semester ?? 1
+      const seasonalAdd = modal.mode === "add" && isSeasonal(modal.semester)
+
+      let isRetake = modalIsRetake
+      let toFlip: HistoryItem[] = []
+
+      if (seasonalAdd) {
+        // 같은 과목코드의 기존 이수 이력
+        const sameCourse = histories.filter(
+          (h) => h.course_code === modalSelected.course_code
+        )
+        const newKey = chronoKey(targetYear, targetSemester)
+        const earlierExists = sameCourse.some(
+          (h) => chronoKey(h.year, h.semester) < newKey
+        )
+
+        if (earlierExists) {
+          // 새 계절학기 이전에 이미 이수 → 재수강
+          isRetake = true
+        } else {
+          // 새 계절학기가 가장 이른 이수 → 초수강, 기존 항목 중 false인 것을 true로 변경
+          isRetake = false
+          toFlip = sameCourse.filter(
+            (h) => !h.is_retake && chronoKey(h.year, h.semester) > newKey
+          )
+        }
+      }
+
       await historyApi.add({
         course_code: modalSelected.course_code,
-        year: modal.year ?? new Date().getFullYear(),
-        semester: modal.semester ?? 1,
-        is_retake: modalIsRetake,
+        year: targetYear,
+        semester: targetSemester,
+        is_retake: isRetake,
       })
+
+      for (const h of toFlip) {
+        await historyApi.update(h.id, { is_retake: true })
+      }
+
       const fresh = await historyApi.getMyHistories()
       setHistories(fresh)
       setModal(null)
@@ -169,10 +230,9 @@ export default function GraduationPage() {
     (a: SemesterGroup, b: SemesterGroup) => {
       if (a.year === null) return 1
       if (b.year === null) return -1
-      if (a.year !== b.year) return a.year - b.year
-      if (a.semester === null) return 1
-      if (b.semester === null) return -1
-      return a.semester - b.semester
+      const ka = chronoKey(a.year, a.semester)
+      const kb = chronoKey(b.year, b.semester)
+      return sortDesc ? kb - ka : ka - kb
     }
   )
 
@@ -189,16 +249,24 @@ export default function GraduationPage() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <div className="flex h-14 items-center gap-3">
-            <Link
-              href="/"
+          <div className="flex h-14 items-center relative">
+            <button
+              onClick={() => router.back()}
               className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>대시보드</span>
+              <span>이전</span>
+            </button>
+            <Link
+              href="/"
+              className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
+            >
+              <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
             </Link>
-            <span className="text-border text-muted-foreground/40">/</span>
-            <span className="text-xs text-foreground font-medium">전공 수업 이수 현황</span>
+            <div className="ml-auto">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>
@@ -255,7 +323,31 @@ export default function GraduationPage() {
 
           {/* History List */}
           <section>
-            <h2 className="text-base font-semibold text-foreground mb-4 px-1">상세 이수 내역</h2>
+            <div className="flex items-center justify-between mb-4 px-1">
+              <h2 className="text-base font-semibold text-foreground">상세 이수 내역</h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    setSeasonalPicker({
+                      year: new Date().getFullYear(),
+                      semester: 3,
+                    })
+                  }
+                  className="flex items-center gap-1 text-xs text-white border border-transparent rounded px-2.5 py-1 transition-colors hover:opacity-90"
+                  style={{ backgroundColor: "#B0232A" }}
+                >
+                  <CalendarPlus className="h-3 w-3" />
+                  계절학기 추가
+                </button>
+                <button
+                  onClick={() => setSortDesc((v) => !v)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border border-border rounded px-2.5 py-1 hover:bg-muted transition-colors"
+                >
+                  <ArrowUpDown className="h-3 w-3" />
+                  {sortDesc ? "최신순" : "오래된순"}
+                </button>
+              </div>
+            </div>
             {isLoading ? (
               <div className="rounded-lg border border-border bg-card py-20 text-center text-sm text-muted-foreground">
                 로딩 중...
@@ -266,7 +358,27 @@ export default function GraduationPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {semesterGroups.map((group, idx) => (
+                {(() => {
+                  const regularGroups = semesterGroups.filter((g) => !isSeasonal(g.semester))
+                  return semesterGroups.map((group) => {
+                    const seasonal = isSeasonal(group.semester)
+                    let headerLabel: string
+                    let subLabel: string | null = null
+                    if (seasonal) {
+                      headerLabel = "계절학기"
+                      subLabel = group.year
+                        ? `(${group.year}년 ${semesterDisplay(group.semester)})`
+                        : `(${semesterDisplay(group.semester)})`
+                    } else {
+                      const regIdx = regularGroups.indexOf(group)
+                      const pos = sortDesc ? regularGroups.length - regIdx : regIdx + 1
+                      headerLabel = `${pos}학기`
+                      subLabel =
+                        group.year && group.semester
+                          ? `(${group.year}년 ${semesterDisplay(group.semester)})`
+                          : null
+                    }
+                    return (
                   <div
                     key={`${group.year}-${group.semester}`}
                     className="overflow-hidden rounded-lg border border-border bg-card"
@@ -275,12 +387,10 @@ export default function GraduationPage() {
                     <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/40">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-semibold text-foreground">
-                          {idx + 1}학기
+                          {headerLabel}
                         </span>
-                        {group.year && group.semester && (
-                          <span className="text-xs text-muted-foreground">
-                            ({group.year}년 {group.semester}학기)
-                          </span>
+                        {subLabel && (
+                          <span className="text-xs text-muted-foreground">{subLabel}</span>
                         )}
                       </div>
                       <div className="flex items-center gap-3">
@@ -389,7 +499,9 @@ export default function GraduationPage() {
                       ))}
                     </div>
                   </div>
-                ))}
+                    )
+                  })
+                })()}
               </div>
             )}
           </section>
@@ -419,7 +531,7 @@ export default function GraduationPage() {
                 </h3>
                 {modal.year && modal.semester && (
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {modal.year}년 {modal.semester}학기
+                    {modal.year}년 {semesterDisplay(modal.semester)}
                   </p>
                 )}
               </div>
@@ -507,27 +619,29 @@ export default function GraduationPage() {
 
             {/* 재수강 토글 + 저장 */}
             <div className="px-5 py-4 border-t border-border flex-shrink-0 flex flex-col gap-3">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={modalIsRetake}
-                  onClick={() => setModalIsRetake((v) => !v)}
-                  className={`relative h-5 w-9 rounded-full transition-colors flex-shrink-0 ${
-                    modalIsRetake ? "bg-amber-400" : "bg-muted"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                      modalIsRetake ? "translate-x-4" : ""
+              {!(modal.mode === "add" && isSeasonal(modal.semester)) && (
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={modalIsRetake}
+                    onClick={() => setModalIsRetake((v) => !v)}
+                    className={`relative h-5 w-9 rounded-full transition-colors flex-shrink-0 ${
+                      modalIsRetake ? "bg-amber-400" : "bg-muted"
                     }`}
-                  />
-                </button>
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <RotateCcw className="h-3 w-3" />
-                  재수강
-                </span>
-              </label>
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                        modalIsRetake ? "translate-x-4" : ""
+                      }`}
+                    />
+                  </button>
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <RotateCcw className="h-3 w-3" />
+                    재수강
+                  </span>
+                </label>
+              )}
 
               <div className="flex gap-2">
                 <button
@@ -553,6 +667,101 @@ export default function GraduationPage() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 계절학기 선택 모달 ───────────────────────────── */}
+      {seasonalPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={(e) => e.target === e.currentTarget && setSeasonalPicker(null)}
+        >
+          <div className="w-full max-w-sm rounded-xl border border-border bg-background shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                <CalendarPlus className="h-4 w-4" style={{ color: "#B0232A" }} />
+                계절학기 선택
+              </h3>
+              <button
+                onClick={() => setSeasonalPicker(null)}
+                className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  년도
+                </label>
+                <select
+                  value={seasonalPicker.year}
+                  onChange={(e) =>
+                    setSeasonalPicker({
+                      ...seasonalPicker,
+                      year: Number(e.target.value),
+                    })
+                  }
+                  className="w-full h-9 px-3 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-[#B0232A]"
+                >
+                  {SEASONAL_YEARS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}년
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                  학기
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([3, 4] as const).map((s) => {
+                    const active = seasonalPicker.semester === s
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() =>
+                          setSeasonalPicker({ ...seasonalPicker, semester: s })
+                        }
+                        className={`h-9 rounded-md text-sm border transition-colors ${
+                          active
+                            ? "text-white border-transparent"
+                            : "text-muted-foreground border-border hover:bg-muted"
+                        }`}
+                        style={active ? { backgroundColor: "#B0232A" } : undefined}
+                      >
+                        {semesterDisplay(s)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-border flex gap-2">
+              <button
+                onClick={() => setSeasonalPicker(null)}
+                className="flex-1 h-9 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  const { year, semester } = seasonalPicker
+                  setSeasonalPicker(null)
+                  setModal({ mode: "add", year, semester })
+                }}
+                className="flex-1 h-9 rounded-md text-sm font-medium text-white transition-colors"
+                style={{ backgroundColor: "#B0232A" }}
+              >
+                다음
+              </button>
             </div>
           </div>
         </div>

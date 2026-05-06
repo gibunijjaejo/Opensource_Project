@@ -5,7 +5,7 @@ pipeline {
         BACKEND_URL     = 'http://localhost:8080'
         FRONTEND_URL    = 'http://localhost:3000'
         DISCORD_WEBHOOK = credentials('discord-webhook')
-        FAILED_STAGE    = 'Unknown'   // 실패 단계 추적용 (각 stage에서 덮어씀)
+        FAILED_STAGE    = 'Unknown'
     }
 
     stages {
@@ -20,13 +20,15 @@ pipeline {
                     def branchSlug = env.BRANCH_SHORT.replaceAll('/', '_')
                     def marker = "/var/lib/jenkins/.seoganpyo_last_commit_${branchSlug}"
                     def last   = sh(script: "cat ${marker} 2>/dev/null || echo ''", returnStdout: true).trim()
-                    if (last == commit) {
+                    def isManual = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').size() > 0
+                    if (!isManual && last == commit) {
                         echo "동일 커밋(${commit.take(8)}) — 재빌드 건너뜀"
                         currentBuild.result = 'ABORTED'
                         throw new org.jenkinsci.plugins.workflow.steps.FlowInterruptedException(
                             hudson.model.Result.ABORTED
                         )
                     }
+                    if (isManual) echo "수동 빌드 — 동일 커밋 체크 건너뜀"
                     sh "echo '${commit}' > ${marker}"
                     echo "브랜치: ${env.BRANCH_SHORT} | 커밋: ${commit.take(8)}"
                 }
@@ -40,7 +42,7 @@ pipeline {
                 stage('Backend Lint') {
                     when { expression { return env.BRANCH_SHORT == 'dev' } }
                     steps {
-                        script { env.FAILED_STAGE = 'Backend Lint' }
+                        script { currentBuild.description = 'Backend Lint' }
                         sh '''
                             python3 -m venv .venv-lint
                             .venv-lint/bin/pip install ruff --quiet
@@ -52,7 +54,7 @@ pipeline {
                 stage('Frontend Build') {
                     when { expression { return env.BRANCH_SHORT == 'dev' } }
                     steps {
-                        script { env.FAILED_STAGE = 'Frontend Build' }
+                        script { currentBuild.description = 'Frontend Build' }
                         dir('frontend') {
                             sh '''
                                 /usr/bin/npm install --prefix $HOME/.npm-global pnpm@10.32.1 --quiet
@@ -72,7 +74,7 @@ pipeline {
         stage('Test & Coverage') {
             when { expression { return env.BRANCH_SHORT == 'dev' } }
             steps {
-                script { env.FAILED_STAGE = 'Test & Coverage' }
+                script { currentBuild.description = 'Test & Coverage' }
                 sh '''
                     python3 -m venv .venv-test
                     .venv-test/bin/pip install -r requirements.txt --quiet
@@ -104,7 +106,7 @@ pipeline {
         stage('Pre-Deploy Check') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
             steps {
-                script { env.FAILED_STAGE = 'Pre-Deploy Check' }
+                script { currentBuild.description = 'Pre-Deploy Check' }
                 sh 'bash scripts/pre-deploy.sh'
             }
         }
@@ -113,7 +115,7 @@ pipeline {
         stage('Deploy') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
             steps {
-                script { env.FAILED_STAGE = 'Deploy' }
+                script { currentBuild.description = 'Deploy' }
                 sh '''
                     docker compose stop backend frontend ocr-service redis || true
                     docker compose rm -f backend frontend ocr-service redis || true
@@ -126,7 +128,7 @@ pipeline {
         stage('Post-Deploy Check') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
             steps {
-                script { env.FAILED_STAGE = 'Post-Deploy Check' }
+                script { currentBuild.description = 'Post-Deploy Check' }
                 sh 'bash scripts/post-deploy.sh'
             }
         }
@@ -159,12 +161,12 @@ pipeline {
                       --mode failure \
                       --build-number "${env.BUILD_NUMBER}" \
                       --branch "${cleanBranch}" \
-                      --failed-stage "${env.FAILED_STAGE}" \
+                      --failed-stage "${currentBuild.description ?: 'Unknown'}" \
                       --webhook "${env.DISCORD_WEBHOOK}" \
                       --containers seoganpyo-api seoganpyo-frontend seoganpyo-ocr \
                     || curl -s -X POST "${env.DISCORD_WEBHOOK}" \
                          -H "Content-Type: application/json" \
-                         -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"❌ **빌드 실패** — 빌드 #${env.BUILD_NUMBER} | ${cleanBranch} | 실패 단계: ${env.FAILED_STAGE}\\"}"
+                         -d "{\\"username\\": \\"Jenkins\\", \\"content\\": \\"❌ **빌드 실패** — 빌드 #${env.BUILD_NUMBER} | ${cleanBranch} | 실패 단계: ${currentBuild.description ?: 'Unknown'}\\"}"
                 """
             }
         }
