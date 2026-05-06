@@ -124,3 +124,9 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .font-logo {
+    font-family: var(--font-logo);
+  }
+}

@@ -19,6 +19,7 @@ export interface CourseDetail {
   keyword: string | null
   overview: string | null
   pdf_hash: string | null
+  recommendation: string | null
 }
 
 export interface SyllabusSummary {
