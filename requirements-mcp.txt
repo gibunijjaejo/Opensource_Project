@@ -1,0 +1,22 @@
+# MCP 서버 + admin 챗 UI 백엔드 어댑터 전용 의존성
+# 평소엔 backend 의존성(requirements.txt)으로 충분하지만,
+# mcp 패키지가 websockets/httpx 신버전을 요구해서 backend와 충돌하므로 분리.
+#
+# 설치:
+#   py -3.11 -m venv .venv-mcp
+#   .venv-mcp/Scripts/pip install -r requirements-mcp.txt
+#
+# 실행:
+#   .venv-mcp/Scripts/python scripts/mcp_seoganpyo.py
+
+# backend 모델·세션 import에 필요한 최소 의존성
+SQLAlchemy>=2.0
+psycopg2-binary>=2.9
+python-dotenv>=1.0
+pydantic>=2.0
+
+# MCP 서버 SDK
+mcp>=1.2.0
+
+# admin 챗 UI 어댑터에서 Gemini tool use 호출용
+google-genai>=0.3.0
