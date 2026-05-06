@@ -58,6 +58,7 @@ type LectureDetail = {
   teaching_method: string | null
   track_id: number | null
   keyword: string | null
+  recommendation: string | null
   has_summary: boolean
   has_pdf_hash: boolean
 }
@@ -505,6 +506,7 @@ export default function AdminLecturesPage() {
                                 value={detail.track_id ? `${detail.track_id}: ${TRACK_NAMES[detail.track_id] ?? "-"}` : null}
                               />
                               <DetailField label="키워드" value={detail.keyword} />
+                              <DetailField label="AI 추천 (recommendation)" value={detail.recommendation} />
                               <div className="text-muted-foreground pt-1 border-t border-border">
                                 hash 저장: {detail.has_pdf_hash ? "✓" : "✗"}
                               </div>

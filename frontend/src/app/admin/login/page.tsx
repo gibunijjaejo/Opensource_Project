@@ -44,8 +44,8 @@ export default function AdminLoginPage() {
       <header className="border-b border-border">
         <div className="mx-auto max-w-md px-4">
           <div className="flex h-14 items-center justify-center gap-2">
-            <BookOpen className="h-4 w-4" style={{ color: "#B0232A" }} />
-            <span className="text-sm font-semibold">서간표 관리자</span>
+            <BookOpen className="h-5 w-5" style={{ color: "#B0232A" }} />
+            <span className="text-xl font-semibold font-logo">서간표 관리자</span>
           </div>
         </div>
       </header>

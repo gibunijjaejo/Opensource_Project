@@ -1,6 +1,22 @@
 import type { Metadata } from "next";
+import { Noto_Sans_KR } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { AdminMessageModal } from "@/components/features/admin-message-modal";
+
+const notoSansKR = Noto_Sans_KR({
+    subsets: ["latin"],
+    weight: ["400", "500", "700"],
+    variable: "--font-noto-sans-kr",
+    display: "swap",
+});
+
+const logoFont = localFont({
+    src: "../../font/이서윤체.ttf",
+    variable: "--font-logo",
+    display: "swap",
+});
 
 export const metadata: Metadata = {
     title: "서간표",
@@ -15,7 +31,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="ko" suppressHydrationWarning>
+        <html lang="ko" suppressHydrationWarning className={`${notoSansKR.variable} ${logoFont.variable}`}>
             <body className="font-sans antialiased">
                 <ThemeProvider
                     attribute="class"
@@ -23,6 +39,7 @@ export default function RootLayout({
                     enableSystem={false}
                 >
                     {children}
+                    <AdminMessageModal />
                 </ThemeProvider>
             </body>
         </html>

@@ -10,6 +10,7 @@ class CourseDetailResponse(BaseModel):
     keyword: Optional[str] = None
     overview: Optional[str] = None
     pdf_hash: Optional[str] = None
+    recommendation: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_student_id
 from app.models.post import Post, Comment, PostLike, CommentLike
-from app.models.report import Report
+from app.models.user import User
 from app.schemas.post import PostResponse, PostDetailResponse, CommentCreate, CommentResponse, LikeResponse, PostUpdate, ReportCreate
+from app.services import report_service
 
 UPLOAD_DIR = "static/uploads/posts"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -66,6 +67,10 @@ async def create_post(
     student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ):
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user or not user.can_post:
+        raise HTTPException(status_code=403, detail="게시글 작성이 제한된 사용자입니다.")
+
     file_path = None
     file_name = None
     if file and file.filename:
@@ -138,9 +143,7 @@ def delete_post(
 
 # ── 신고 ──────────────────────────────────────────────
 
-VALID_REASONS = {"욕설", "스팸", "기타"}
-
-@router.post("/{category}/{post_id}/report", status_code=201)
+@router.post("/{category}/{post_id}/report", status_code=201, response_model=dict)
 def report_post(
     category: str,
     post_id: int,
@@ -148,24 +151,7 @@ def report_post(
     student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ):
-    post = db.query(Post).filter(Post.id == post_id, Post.category == category).first()
-    if not post:
-        raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")
-    if post.student_id == student_id:
-        raise HTTPException(status_code=400, detail="본인 게시글은 신고할 수 없습니다.")
-    if req.reason not in VALID_REASONS:
-        raise HTTPException(status_code=400, detail="올바르지 않은 신고 사유입니다.")
-    duplicate = db.query(Report).filter(
-        Report.reporter_id == student_id,
-        Report.target_type == "post",
-        Report.target_id == post_id,
-    ).first()
-    if duplicate:
-        raise HTTPException(status_code=409, detail="이미 신고한 게시글입니다.")
-    api_scores = {"detail": req.detail} if req.detail else None
-    report = Report(reporter_id=student_id, target_type="post", target_id=post_id, reason=req.reason, api_scores=api_scores)
-    db.add(report)
-    db.commit()
+    report_service.create_report(db, student_id, post_id, category, req.reason, req.detail)
     return {"message": "신고가 접수되었습니다."}
 
 
@@ -205,6 +191,9 @@ def create_comment(
     student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ):
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user or not user.can_comment:
+        raise HTTPException(status_code=403, detail="댓글 작성이 제한된 사용자입니다.")
     post = db.query(Post).filter(Post.id == post_id, Post.category == category).first()
     if not post:
         raise HTTPException(status_code=404, detail="게시글을 찾을 수 없습니다.")

@@ -99,7 +99,9 @@ export default function CommunityPage({ params }: Props) {
       setShowForm(false)
       // 등록 후 바로 상세 표시
       handleSelectPost(post.id)
-    } catch {}
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "게시글 등록에 실패했습니다.")
+    }
     setIsSubmitting(false)
   }
 
@@ -128,7 +130,9 @@ export default function CommunityPage({ params }: Props) {
       const comment = await communityApi.createComment(decodedCategory, selectedPost.id, commentInput)
       setSelectedPost((prev) => prev ? { ...prev, comments: [...prev.comments, comment], comment_count: prev.comment_count + 1 } : prev)
       setCommentInput("")
-    } catch {}
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "댓글 등록에 실패했습니다.")
+    }
   }
 
   const handleDeleteComment = async (commentId: number) => {
@@ -208,8 +212,8 @@ export default function CommunityPage({ params }: Props) {
               href="/"
               className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
             >
-              <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
+              <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
             </Link>
             <div className="ml-auto flex items-center gap-2">
               <ThemeToggle />

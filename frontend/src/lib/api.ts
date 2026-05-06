@@ -258,6 +258,229 @@ export const professorsApi = {
     request<Professor>(`/api/v1/professors/${professorId}`),
 }
 
+// ── User Messages ─────────────────────────────────────
+export const messagesApi = {
+  getUnread: () => request<AdminMessageItem[]>("/api/v1/users/me/messages/unread"),
+  markRead: (id: number) =>
+    request<void>(`/api/v1/users/me/messages/${id}/read`, { method: "PATCH" }),
+}
+
+// ── Admin ─────────────────────────────────────────────
+function getAdminToken(): string | null {
+  if (typeof document === "undefined") return null
+  const match = document.cookie.match(/admin_token=([^;]+)/)
+  return match ? match[1] : null
+}
+
+async function adminRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = getAdminToken()
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  }
+  if (token) headers["Authorization"] = `Bearer ${token}`
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.detail || "요청에 실패했습니다.")
+  }
+  if (res.status === 204) return undefined as T
+  return res.json()
+}
+
+export interface AdminReport {
+  id: number
+  reporter_id: number | null
+  reporter_name: string | null
+  target_type: string
+  target_id: number
+  target_title: string | null
+  target_content: string | null
+  target_author: string | null
+  target_category: string | null
+  reason: string
+  detail: string | null
+  status: string
+  created_at: string
+}
+
+export interface AdminContact {
+  id: number
+  student_id: number | null
+  sender_name: string | null
+  sender_email: string | null
+  subject: string
+  content: string
+  status: string
+  created_at: string
+}
+
+export interface AdminUser {
+  student_id: number
+  name: string
+  email: string
+  role: string
+  can_post: boolean
+  can_comment: boolean
+  current_semester: number | null
+}
+
+export interface AdminMessageItem {
+  id: number
+  content: string
+  sender_name: string | null
+  created_at: string
+}
+
+export interface AdminPost {
+  id: number
+  category: string
+  title: string
+  content: string
+  author_name: string | null
+  is_anonymous: boolean
+  student_id: number | null
+  comment_count: number
+  like_count: number
+  file_path: string | null
+  file_name: string | null
+  created_at: string
+}
+
+export interface AdminPostComment {
+  id: number
+  content: string
+  author_name: string | null
+  student_id: number | null
+  created_at: string
+}
+
+export const adminApi = {
+  // 신고 관리
+  getReportCounts: () =>
+    adminRequest<{ total: number; 욕설: number; 스팸: number; 기타: number }>("/admin/reports/counts"),
+
+  getReports: (params?: { status?: string; reason?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.status) qs.set("status", params.status)
+    if (params?.reason) qs.set("reason", params.reason)
+    return adminRequest<AdminReport[]>(`/admin/reports?${qs}`)
+  },
+
+  resolveReport: (id: number) =>
+    adminRequest<{ message: string; report_id: number }>(`/admin/reports/${id}`, { method: "PATCH" }),
+
+  dismissReport: (id: number) =>
+    adminRequest<{ message: string; report_id: number }>(`/admin/reports/${id}/dismiss`, { method: "PATCH" }),
+
+  // 문의 관리
+  getContactCounts: () =>
+    adminRequest<{ total: number }>("/admin/contacts/counts"),
+
+  getContacts: (params?: { status?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.status) qs.set("status", params.status)
+    return adminRequest<AdminContact[]>(`/admin/contacts?${qs}`)
+  },
+
+  resolveContact: (id: number) =>
+    adminRequest<{ message: string }>(`/admin/contacts/${id}/resolve`, { method: "PATCH" }),
+
+  dismissContact: (id: number) =>
+    adminRequest<{ message: string }>(`/admin/contacts/${id}/dismiss`, { method: "PATCH" }),
+
+  // 사용자 관리
+  getUsers: (q?: string) => {
+    const qs = q ? `?q=${encodeURIComponent(q)}` : ""
+    return adminRequest<AdminUser[]>(`/admin/users${qs}`)
+  },
+
+  toggleCanPost: (studentId: number) =>
+    adminRequest<{ student_id: number; can_post: boolean }>(`/admin/users/${studentId}/can-post`, { method: "PATCH" }),
+
+  toggleCanComment: (studentId: number) =>
+    adminRequest<{ student_id: number; can_comment: boolean }>(`/admin/users/${studentId}/can-comment`, { method: "PATCH" }),
+
+  sendMessage: (studentId: number, content: string) =>
+    adminRequest<{ message: string }>(`/admin/users/${studentId}/message`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+
+  // 게시글 관리
+  getPostCategories: () =>
+    adminRequest<{ category: string; count: number }[]>("/admin/posts/categories"),
+
+  getAllPosts: (category?: string) => {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : ""
+    return adminRequest<AdminPost[]>(`/admin/posts${qs}`)
+  },
+
+  getPostComments: (postId: number) =>
+    adminRequest<AdminPostComment[]>(`/admin/posts/${postId}/comments`),
+
+  deletePost: (postId: number) =>
+    adminRequest<{ message: string }>(`/admin/posts/${postId}`, { method: "DELETE" }),
+
+  deleteComment: (commentId: number) =>
+    adminRequest<{ message: string }>(`/admin/comments/${commentId}`, { method: "DELETE" }),
+
+  deleteUser: (studentId: number) =>
+    adminRequest<{ message: string }>(`/admin/users/${studentId}`, { method: "DELETE" }),
+
+  updateUserInfo: (studentId: number, data: {
+    new_student_id?: number
+    name?: string
+    email?: string
+    current_semester?: number | null
+  }) =>
+    adminRequest<{ student_id: number; name: string; email: string; current_semester: number | null }>(
+      `/admin/users/${studentId}/info`,
+      { method: "PATCH", body: JSON.stringify(data) }
+    ),
+
+  resetPassword: (studentId: number, newPassword: string) =>
+    adminRequest<{ message: string }>(`/admin/users/${studentId}/password`, {
+      method: "PATCH",
+      body: JSON.stringify({ new_password: newPassword }),
+    }),
+
+  // 운영 어시스턴트 (Gemini tool use)
+  askAssistant: (message: string, history: AssistantMessage[] = []) =>
+    adminRequest<AssistantAskResponse>("/admin/chat/ask", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
+
+  listAssistantTools: () =>
+    adminRequest<AssistantToolMeta[]>("/admin/chat/tools"),
+}
+
+export interface AssistantMessage {
+  role: "user" | "model"
+  content: string
+}
+
+export interface AssistantToolCall {
+  name: string
+  args: Record<string, unknown>
+  result: unknown
+  duration_ms: number
+}
+
+export interface AssistantAskResponse {
+  answer: string
+  tool_calls: AssistantToolCall[]
+  iterations: number
+  model: string
+}
+
+export interface AssistantToolMeta {
+  name: string
+  description: string
+  params: Record<string, { type: string; required?: boolean; description: string }>
+}
+
 // ── Portfolio ─────────────────────────────────────────
 export type PortfolioKind =
   | "campus_activity"

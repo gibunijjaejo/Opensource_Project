@@ -79,8 +79,8 @@ export default function SignupPage() {
         <div className="mx-auto max-w-md px-4 sm:px-6">
           <div className="flex h-14 items-center justify-center">
             <Link href="/" className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
+              <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
             </Link>
           </div>
         </div>
