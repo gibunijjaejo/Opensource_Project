@@ -114,12 +114,25 @@ pipeline {
         // ── 6. Docker 빌드 & 배포 (main 전용) ───────────────────────
         stage('Deploy') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
+            environment {
+                // Jenkins Credentials(Secret text, ID="gemini-api-key")에서 주입.
+                // admin 챗 UI / 포트폴리오 AI 평가 둘 다 사용.
+                GEMINI_API_KEY = credentials('gemini-api-key')
+            }
             steps {
                 script { currentBuild.description = 'Deploy' }
                 sh '''
+                    set +x
+                    # .env 파일에 GEMINI_API_KEY 갱신 (기존 라인 제거 후 새로 추가)
+                    touch .env
+                    sed -i '/^GEMINI_API_KEY=/d' .env
+                    echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .env
+                    set -x
+
                     docker compose stop backend frontend ocr-service redis || true
                     docker compose rm -f backend frontend ocr-service redis || true
-                    docker compose up --build -d backend frontend ocr-service redis
+                    docker compose -f docker-compose.yml -f docker-compose.observability.app.yml \
+                        up --build -d backend frontend ocr-service redis promtail
                 '''
             }
         }
