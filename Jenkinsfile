@@ -131,7 +131,8 @@ pipeline {
 
                     docker compose stop backend frontend ocr-service redis || true
                     docker compose rm -f backend frontend ocr-service redis || true
-                    docker compose up --build -d backend frontend ocr-service redis
+                    docker compose -f docker-compose.yml -f docker-compose.observability.app.yml \
+                        up --build -d backend frontend ocr-service redis promtail
                 '''
             }
         }
