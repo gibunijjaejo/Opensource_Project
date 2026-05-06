@@ -5,7 +5,6 @@
 
 services:
     promtail:
-<<<<<<< HEAD
         image: grafana/promtail:3.3.2
         container_name: seoganpyo-promtail
         restart: unless-stopped
