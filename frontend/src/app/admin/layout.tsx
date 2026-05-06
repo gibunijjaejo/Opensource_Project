@@ -87,8 +87,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* 사이드바 */}
       <aside className="w-56 flex-shrink-0 border-r border-border bg-card flex flex-col">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
-          <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-          <span className="text-sm font-semibold">서간표 관리자</span>
+          <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+          <span className="text-xl font-semibold font-logo">서간표 관리자</span>
         </div>
 
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1">

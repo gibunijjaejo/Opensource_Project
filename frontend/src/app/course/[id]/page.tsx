@@ -210,8 +210,8 @@ export default function CourseDetailPage({ params }: Props) {
                             href="/"
                             className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
                         >
-                            <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-                            <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
+                            <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+                            <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
                         </Link>
                         <div className="ml-auto">
                             <ThemeToggle />
@@ -378,6 +378,17 @@ export default function CourseDetailPage({ params }: Props) {
                                                     <FileText className="h-3.5 w-3.5" />
                                                     강의계획서 보러가기
                                                 </span>
+                                            )}
+                                            {course.details?.recommendation && (
+                                                <div
+                                                    className="rounded-md border px-4 py-3"
+                                                    style={{ borderColor: "#B0232A", backgroundColor: "rgba(176,35,42,0.05)" }}
+                                                >
+                                                    <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: "#B0232A" }}>
+                                                        AI 추천
+                                                    </p>
+                                                    <p className="text-sm text-foreground">{course.details.recommendation}</p>
+                                                </div>
                                             )}
                                             {(course.details?.required_skills || course.details?.evaluation_method || course.details?.teaching_method || course.details?.keyword) && (
                                                 <SyllabusAiCard>

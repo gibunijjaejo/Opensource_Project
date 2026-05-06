@@ -87,8 +87,8 @@ function ProfessorsContent() {
               <span>이전</span>
             </button>
             <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
-              <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
-              <span className="text-sm font-semibold text-foreground tracking-tight">서간표</span>
+              <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
+              <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
             </Link>
             <div className="ml-auto"><ThemeToggle /></div>
           </div>
