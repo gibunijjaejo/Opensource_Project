@@ -712,6 +712,7 @@ def get_lecture_detail(
         "teaching_method": detail.teaching_method if detail else None,
         "track_id": detail.track_id if detail else None,
         "keyword": detail.keyword if detail else None,
+        "recommendation": detail.recommendation if detail else None,
         "has_summary": bool(detail and detail.overview),
         "has_pdf_hash": bool(detail and detail.pdf_hash),
     }
