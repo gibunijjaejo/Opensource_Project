@@ -115,18 +115,22 @@ pipeline {
         stage('Deploy') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
             environment {
-                // Jenkins Credentials(Secret text, ID="gemini-api-key")에서 주입.
-                // admin 챗 UI / 포트폴리오 AI 평가 둘 다 사용.
+                // Jenkins Credentials(Secret text)에서 API 키 주입.
+                // admin 챗 UI / 포트폴리오 AI 평가에서 사용.
                 GEMINI_API_KEY = credentials('gemini-api-key')
+                // ocr-service의 시간표/강의계획서 OCR에서 사용.
+                MISTRAL_API_KEY = credentials('mistral-api-key')
             }
             steps {
                 script { currentBuild.description = 'Deploy' }
                 sh '''
                     set +x
-                    # .env 파일에 GEMINI_API_KEY 갱신 (기존 라인 제거 후 새로 추가)
+                    # .env 파일에 API 키들 갱신 (기존 라인 제거 후 새로 추가)
                     touch .env
                     sed -i '/^GEMINI_API_KEY=/d' .env
                     echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .env
+                    sed -i '/^MISTRAL_API_KEY=/d' .env
+                    echo "MISTRAL_API_KEY=${MISTRAL_API_KEY}" >> .env
                     set -x
 
                     docker compose stop backend frontend ocr-service redis || true
