@@ -49,9 +49,10 @@ services:
         environment:
             - REDIS_URL=redis://redis:6379/0
             - OCR_SERVICE_URL=http://ocr-service:8000
-            # 컨테이너 네트워크에서 Prometheus는 service name으로 접근.
-            # (관측 스택이 안 떠있으면 도구가 connection refused 반환 — 의도된 동작)
-            - PROMETHEUS_URL=http://prometheus:9090
+            # Prometheus URL — .env에서 override 가능.
+            # 디폴트: 같은 호스트에 make up-obs로 띄운 prometheus (docker network).
+            # 외부 모니터링 서버 사용 시 .env에 PROMETHEUS_URL=http://<IP>:9090 설정.
+            - PROMETHEUS_URL=${PROMETHEUS_URL:-http://prometheus:9090}
         command:
             [
                 "uvicorn",
