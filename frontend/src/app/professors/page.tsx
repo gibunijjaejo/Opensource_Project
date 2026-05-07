@@ -86,7 +86,7 @@ function ProfessorsContent() {
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>이전</span>
             </button>
-            <Link href="/" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
+            <Link href="/dashboard" className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2">
               <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
               <span className="text-xl font-semibold text-foreground tracking-tight font-logo">서간표</span>
             </Link>
