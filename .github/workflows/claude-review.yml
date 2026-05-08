@@ -1,0 +1,40 @@
+name: Claude Code Review
+
+# @claude 멘션 시에만 동작 — 비용 절감 + 필요할 때만 호출
+# 사용법:
+#   1) PR 본문 또는 코멘트에 "@claude 리뷰해줘" 작성
+#   2) PR 코멘트에 "@claude CLAUDE.md 기준으로 리뷰" 등 자유 지시
+#   3) 이슈 코멘트에 "@claude 이 이슈 분석해줘"
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request:
+    types: [opened]
+
+jobs:
+  claude-mention:
+    # @claude가 포함된 경우에만 실행 (대소문자 무관)
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # diff 비교용 전체 히스토리
+
+      - name: Claude PR Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # CLAUDE.md를 기본 컨텍스트로 사용 — 별도 prompt 미지정 시
+          # @claude 뒤에 적은 지시를 그대로 따름
