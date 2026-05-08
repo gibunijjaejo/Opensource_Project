@@ -14,6 +14,13 @@ on:
   pull_request:
     types: [opened]
 
+# OIDC 토큰 요청을 위해 workflow 레벨에도 권한 명시
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
 jobs:
   claude-mention:
     # @claude가 포함된 경우에만 실행 (대소문자 무관)
