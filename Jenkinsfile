@@ -102,6 +102,55 @@ pipeline {
             }
         }
 
+        // ── 4. 보안 스캔 (dev 전용) ──────────────────────────────────
+        stage('Security Scan') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
+            steps {
+                script { currentBuild.description = 'Security Scan' }
+                sh '''
+                    mkdir -p security-reports
+
+                    docker run --rm -v "$(pwd)":/src \
+                        aquasec/trivy:latest fs \
+                        --format json \
+                        --output /src/security-reports/trivy-fs.json \
+                        --severity HIGH,CRITICAL \
+                        --scanners vuln,secret,config \
+                        /src || true
+
+                    ls -la security-reports/
+                '''
+            }
+        }
+
+        // ── 4-2. DefectDojo로 결과 업로드 (dev 전용) ────────────────
+        stage('Upload to Defect Dojo') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
+            environment {
+                DD_URL        = 'http://163.239.77.65:8888'
+                DD_TOKEN      = credentials('defectdojo-token')
+                DD_ENGAGEMENT = '1'
+            }
+            steps {
+                sh '''
+                    if [ -s "security-reports/trivy-fs.json" ]; then
+                        curl -sf -X POST "${DD_URL}/api/v2/import-scan/" \
+                            -H "Authorization: Token ${DD_TOKEN}" \
+                            -F "scan_type=Trivy Scan" \
+                            -F "engagement=${DD_ENGAGEMENT}" \
+                            -F "file=@security-reports/trivy-fs.json" \
+                            -F "active=true" \
+                            -F "verified=false" \
+                            -F "branch_tag=${BRANCH_SHORT}" \
+                            -F "build_id=${BUILD_NUMBER}" \
+                            > /dev/null && echo "Uploaded: trivy-fs.json"
+                    else
+                        echo "No trivy-fs.json to upload"
+                    fi
+                '''
+            }
+        }
+
         // ── 5. 배포 전 점검 (main 전용) ──────────────────────────────
         stage('Pre-Deploy Check') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
