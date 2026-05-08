@@ -35,24 +35,32 @@ jobs:
               id: ctx
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  EVENT_NAME: ${{ github.event_name }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  ISSUE_NUMBER: ${{ github.event.issue.number }}
+                  IS_PR_COMMENT: ${{ github.event.issue.pull_request != null }}
+                  PR_BODY: ${{ github.event.pull_request.body }}
+                  COMMENT_BODY: ${{ github.event.comment.body }}
+                  REPO: ${{ github.repository }}
               run: |
-                  # PR 번호 추출 (이슈 멘션은 미지원 — PR만 처리)
-                  if [ "${{ github.event_name }}" = "pull_request" ]; then
-                    PR_NUM=${{ github.event.pull_request.number }}
-                    USER_REQUEST="${{ github.event.pull_request.body }}"
+                  # PR 번호 추출 — env 변수로 받아 셸 인젝션 방지
+                  if [ "$EVENT_NAME" = "pull_request" ]; then
+                    PR_NUM="$PR_NUMBER"
+                    # PR_BODY를 환경변수에서 안전하게 파일로
+                    printf '%s' "$PR_BODY" > user_request.txt
                   else
-                    if [ -z "${{ github.event.issue.pull_request }}" ]; then
+                    if [ "$IS_PR_COMMENT" != "true" ]; then
                       echo "이슈 멘션은 미지원 — PR에 멘션해주세요"
                       exit 0
                     fi
-                    PR_NUM=${{ github.event.issue.number }}
-                    USER_REQUEST="${{ github.event.comment.body }}"
+                    PR_NUM="$ISSUE_NUMBER"
+                    printf '%s' "$COMMENT_BODY" > user_request.txt
                   fi
 
                   echo "PR_NUM=$PR_NUM" >> $GITHUB_ENV
 
-                  # PR diff 가져오기 (Gemini 2.0 Flash는 1M context, 100KB 충분)
-                  gh pr diff $PR_NUM --repo ${{ github.repository }} | head -c 100000 > pr.diff
+                  # PR diff 가져오기
+                  gh pr diff "$PR_NUM" --repo "$REPO" | head -c 100000 > pr.diff
                   echo "DIFF_SIZE=$(wc -c < pr.diff)" >> $GITHUB_ENV
 
                   # CLAUDE.md 컨벤션
@@ -62,8 +70,7 @@ jobs:
                     echo "" > claude.md
                   fi
 
-                  # 사용자 요청 (멘션 포함된 텍스트)
-                  echo "$USER_REQUEST" > user_request.txt
+                  echo "사용자 요청 길이: $(wc -c < user_request.txt) bytes"
 
             - name: Gemini API 호출
               env:
