@@ -60,7 +60,7 @@ jobs:
                   # 경로 주의: nginx가 /loki/ prefix 제거하므로 /loki/loki/api/...로 호출
                   curl -sG -u "$LOKI_USER:$LOKI_PASS" \
                     "$LOKI_URL/loki/loki/api/v1/query_range" \
-                    --data-urlencode 'query={compose_project="opensource_project"} |~ "(?i)error|exception|traceback|fatal"' \
+                    --data-urlencode 'query={compose_project="seoganpyo"} |~ "(?i)error|exception|traceback|fatal"' \
                     --data-urlencode "start=$START_NS" \
                     --data-urlencode "end=$END_NS" \
                     --data-urlencode "limit=500" \
