@@ -31,7 +31,8 @@ jobs:
                   IDENTIFIERS: '[{"name": "TODO", "labels": ["todo"]}, {"name": "FIXME", "labels": ["bug", "fixme"]}, {"name": "HACK", "labels": ["tech-debt"]}]'
                   ESCAPE: true
                   # 워크플로우/문서 파일은 스캔 제외 (자기 자신의 주석 잡지 않게)
-                  IGNORE: ".github/,docs/,specs/,*.md"
+                  # IGNORE는 regex 패턴 (콤마로 구분)
+                  IGNORE: '\.github/,docs/,specs/,.*\.md$'
                   ISSUE_TEMPLATE: |
                       **위치:** {{ url }}
                       **라인:** {{ line }}
