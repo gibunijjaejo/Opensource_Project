@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/chat", tags=["AdminChat"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "MYKEY")
-GEMINI_MODEL = os.getenv("ADMIN_CHAT_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.0-flash"))
+GEMINI_MODEL = os.getenv("ADMIN_CHAT_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 # 503/UNAVAILABLE 시 자동 폴백 모델 (시연 안정성용)
-# gemini-2.0-flash-lite는 2026년부터 신규 사용자에게 deprecated → 2.5 계열로.
+# gemini-2.0 계열은 2026년부터 신규 사용자에게 deprecated → 2.5 계열로.
 FALLBACK_MODEL = os.getenv("ADMIN_CHAT_FALLBACK_MODEL", "gemini-2.5-flash-lite")
 GEMINI_URL_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
