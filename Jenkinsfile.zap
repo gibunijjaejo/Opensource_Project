@@ -58,6 +58,10 @@ pipeline {
                 sh '''
                     mkdir -p security-reports
 
+                    # Dockerfile 의 COPY ./static ./data 가 요구하는 디렉토리.
+                    # 둘 다 .gitignore 대상이라 git clone 시 받아오지 않음 — 빈 디렉토리 보장.
+                    mkdir -p static/uploads/posts data
+
                     # docker-compose.yml 의 env_file: .env 의존성 충족.
                     # 영구 base .env 는 /var/lib/jenkins/seoganpyo-prod.env (사람이 SSH 로 한 번 작성).
                     # main 의 Deploy 스테이지와 동일한 패턴 — 시크릿은 .env 로 주입.
