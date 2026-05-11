@@ -454,6 +454,16 @@ export const adminApi = {
 
   listAssistantTools: () =>
     adminRequest<AssistantToolMeta[]>("/admin/chat/tools"),
+
+  // 보안 모니터링 사이드바 챗 (Gemini tool use, DefectDojo 전용 도구 5개)
+  askSecurityChat: (message: string, history: AssistantMessage[] = []) =>
+    adminRequest<AssistantAskResponse>("/admin/security/chat/ask", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
+
+  listSecurityChatTools: () =>
+    adminRequest<AssistantToolMeta[]>("/admin/security/chat/tools"),
 }
 
 export interface AssistantMessage {

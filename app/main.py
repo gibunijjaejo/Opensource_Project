@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from app.api import auth, upload, courses, cart, history, users, admin, admin_chat, syllabus, posts, contact, professors, portfolio
+from app.api import auth, upload, courses, cart, history, users, admin, admin_chat, admin_security, admin_security_chat, syllabus, posts, contact, professors, portfolio
 from app.database import engine, Base
 from app.models import user, course, professor, activity, post, report, notice, portfolio as portfolio_models, contact as contact_model, admin_message  # noqa: F401 — Base 테이블 등록용
 
@@ -43,6 +43,8 @@ app.include_router(history.router)
 app.include_router(users.router)
 app.include_router(admin.router)
 app.include_router(admin_chat.router)
+app.include_router(admin_security.router)
+app.include_router(admin_security_chat.router)
 app.include_router(syllabus.router)
 app.include_router(posts.router)
 app.include_router(contact.router)

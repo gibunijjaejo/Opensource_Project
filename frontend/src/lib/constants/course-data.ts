@@ -1,3 +1,8 @@
+// 분류 기준: course_code 가 CSE 로 시작하면 전공(컴공), 그 외는 교양.
+// 사용자 룰은 "course_code prefix" 가 권위 — course_category 컬럼은 표시용 보조.
+export const isMajorCourse = (code: string): boolean =>
+  code.toUpperCase().startsWith("CSE")
+
 // UI 컴포넌트용 Course 타입 (API Course 타입과 별개)
 export interface Course {
   id: string
@@ -7,6 +12,9 @@ export interface Course {
   department: string
   schedule: string
   category: "전공필수" | "전공선택" | "교양" | "일반선택"
+  days?: string | null
+  startTime?: string | null
+  endTime?: string | null
 }
 
 // 관심 분야 (졸업 후 희망 분야)
