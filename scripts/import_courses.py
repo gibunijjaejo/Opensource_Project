@@ -89,7 +89,10 @@ def _load_rows(path: Path) -> pd.DataFrame:
     return pd.read_html(path, header=0)[0]
 
 
-def _department_for(course_code: str) -> str:
+def _department_for(course_code: str, prof_name: str) -> str:
+    # 다중 교수("A, B, C") 는 팀티칭이라 개인 프로필 의미가 없음 → 무조건 교양.
+    if ", " in prof_name:
+        return "교양"
     return "컴퓨터공학과" if course_code.startswith("CSE") else "교양"
 
 
@@ -103,7 +106,7 @@ def _get_or_create_prof(
     pid = prof_index.get(name)
     if pid is not None:
         return pid
-    prof = Professor(name=name, department=_department_for(course_code))
+    prof = Professor(name=name, department=_department_for(course_code, name))
     db.add(prof)
     db.flush()
     prof_index[name] = prof.professor_id
