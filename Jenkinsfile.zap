@@ -58,6 +58,18 @@ pipeline {
                 sh '''
                     mkdir -p security-reports
 
+                    # docker-compose.yml 의 env_file: .env 의존성 충족.
+                    # 영구 base .env 는 /var/lib/jenkins/seoganpyo-prod.env (사람이 SSH 로 한 번 작성).
+                    # main 의 Deploy 스테이지와 동일한 패턴 — 시크릿은 .env 로 주입.
+                    BASE_ENV="/var/lib/jenkins/seoganpyo-prod.env"
+                    if [ -f "$BASE_ENV" ]; then
+                        cp "$BASE_ENV" .env
+                        echo "Base .env 복사 완료 ($(wc -l < .env)줄)"
+                    else
+                        echo "⚠️ Base .env 없음 ($BASE_ENV) — 빈 .env 로 진행 (DB 미연결로 backend 가 죽을 수 있음)"
+                        touch .env
+                    fi
+
                     # 혹시 이전 빌드 잔재가 남아있으면 정리
                     docker compose -p ${COMPOSE_PROJECT} down -v --remove-orphans || true
 
