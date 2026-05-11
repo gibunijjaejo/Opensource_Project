@@ -7,6 +7,9 @@ export interface Course {
   department: string
   schedule: string
   category: "전공필수" | "전공선택" | "교양" | "일반선택"
+  days?: string | null
+  startTime?: string | null
+  endTime?: string | null
 }
 
 // 관심 분야 (졸업 후 희망 분야)
