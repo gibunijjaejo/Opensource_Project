@@ -168,21 +168,40 @@ pipeline {
         stage('Upload ZAP to Defect Dojo') {
             steps {
                 sh '''
-                    if [ -s "security-reports/zap-baseline.json" ]; then
-                        curl -sf -X POST "${DD_URL}/api/v2/import-scan/" \
-                            -H "Authorization: Token ${DD_TOKEN}" \
-                            -F "scan_type=ZAP Scan" \
-                            -F "engagement=${DD_ENGAGEMENT}" \
-                            -F "file=@security-reports/zap-baseline.json" \
-                            -F "active=true" \
-                            -F "verified=false" \
-                            -F "close_old_findings=true" \
-                            -F "branch_tag=nightly-zap" \
-                            -F "build_id=${BUILD_NUMBER}" \
-                            > /dev/null && echo "Uploaded: zap-baseline.json"
-                    else
+                    if [ ! -s "security-reports/zap-baseline.json" ]; then
                         echo "zap-baseline.json 없음 — 스캔 실패 가능, 업로드 스킵"
+                        exit 0
                     fi
+
+                    # 진단 모드: -sf 대신 -s -w 로 HTTP 코드 + 응답 body 출력.
+                    # DefectDojo 가 4xx 반환 시 어떤 필드/값이 문제인지 알 수 있음.
+                    HTTP_CODE=$(curl -s -o /tmp/dd-response.txt -w "%{http_code}" \
+                        -X POST "${DD_URL}/api/v2/import-scan/" \
+                        -H "Authorization: Token ${DD_TOKEN}" \
+                        -F "scan_type=ZAP Scan" \
+                        -F "engagement=${DD_ENGAGEMENT}" \
+                        -F "file=@security-reports/zap-baseline.json" \
+                        -F "active=true" \
+                        -F "verified=false" \
+                        -F "close_old_findings=true" \
+                        -F "branch_tag=nightly-zap" \
+                        -F "build_id=${BUILD_NUMBER}")
+
+                    echo "── DefectDojo response ──"
+                    echo "HTTP $HTTP_CODE"
+                    echo "Body:"
+                    cat /tmp/dd-response.txt
+                    echo ""
+
+                    case "$HTTP_CODE" in
+                        200|201)
+                            echo "✓ Uploaded: zap-baseline.json"
+                            ;;
+                        *)
+                            echo "✗ Upload 실패 (HTTP $HTTP_CODE)"
+                            exit 1
+                            ;;
+                    esac
                 '''
             }
         }
