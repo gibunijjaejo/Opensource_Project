@@ -141,6 +141,11 @@ pipeline {
                     fi
                     echo "ZAP network: $NETWORK"
 
+                    # ZAP 컨테이너는 내부 zap user 로 실행 → 마운트된 호스트 디렉토리(jenkins ownership)에
+                    # 쓰기 권한이 없어 결과 파일 생성 실패 (Permission denied).
+                    # OWASP ZAP docker 공식 가이드대로 쓰기 권한 풀어주기.
+                    chmod 777 security-reports
+
                     # ZAP baseline — 결과는 /zap/wrk 마운트 디렉토리(=workspace/security-reports)에 저장.
                     # -t 대상: 같은 network 안의 backend 컨테이너 이름:포트
                     # -I : passive scan 중 alert 있어도 exit 0 으로 (빌드 계속)
