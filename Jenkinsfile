@@ -102,11 +102,11 @@ pipeline {
             }
         }
 
-        // ── 4. 보안 스캔 (dev 전용) ──────────────────────────────────
-        stage('Security Scan') {
+        // ── 4. SCA + Secret + IaC 스캔 (Trivy, dev 전용) ─────────────
+        stage('Security Scan - Trivy (SCA/Secret/IaC)') {
             when { expression { return env.BRANCH_SHORT == 'dev' } }
             steps {
-                script { currentBuild.description = 'Security Scan' }
+                script { currentBuild.description = 'Trivy fs' }
                 sh '''
                     mkdir -p security-reports
 
@@ -123,7 +123,40 @@ pipeline {
             }
         }
 
-        // ── 4-2. DefectDojo로 결과 업로드 (dev 전용) ────────────────
+        // ── 4-1. SAST 스캔 (Snyk Code, dev 전용) ─────────────────────
+        // Snyk Code 는 정적 코드 분석(SAST) — Trivy 의존성 스캔이 못 보는
+        // "코드 자체의 취약점 패턴"(SQLi 후보, 위험한 eval/exec, 하드코딩 비밀 등)을 찾는다.
+        // 결과는 SARIF 로 출력해 DefectDojo "SARIF" importer 로 업로드.
+        stage('Security Scan - Snyk Code (SAST)') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
+            environment {
+                SNYK_TOKEN = credentials('snyk-token')
+            }
+            steps {
+                script { currentBuild.description = 'Snyk Code SAST' }
+                sh '''
+                    mkdir -p security-reports
+
+                    # snyk/snyk:linux 이미지에 snyk CLI 포함.
+                    # snyk code test 는 finding 발견 시 exit 1 — || true 로 빌드 계속.
+                    docker run --rm \
+                        -e SNYK_TOKEN="${SNYK_TOKEN}" \
+                        -v "$(pwd):/project" \
+                        -w /project \
+                        snyk/snyk:linux \
+                        snyk code test \
+                          --sarif-file-output=security-reports/snyk-code.sarif \
+                          --severity-threshold=high \
+                        || true
+
+                    ls -la security-reports/
+                '''
+            }
+        }
+
+        // ── 4-2. DefectDojo로 모든 스캔 결과 업로드 (dev 전용) ──────
+        // Trivy + Snyk Code 결과를 같은 engagement 에 통합 등록.
+        // close_old_findings=true 로 새 스캔에 없는 옛 finding 자동 mitigated.
         stage('Upload to Defect Dojo') {
             when { expression { return env.BRANCH_SHORT == 'dev' } }
             environment {
@@ -133,6 +166,7 @@ pipeline {
             }
             steps {
                 sh '''
+                    # ─ Trivy (SCA + Secret + IaC) ─
                     if [ -s "security-reports/trivy-fs.json" ]; then
                         curl -sf -X POST "${DD_URL}/api/v2/import-scan/" \
                             -H "Authorization: Token ${DD_TOKEN}" \
@@ -147,6 +181,23 @@ pipeline {
                             > /dev/null && echo "Uploaded: trivy-fs.json"
                     else
                         echo "No trivy-fs.json to upload"
+                    fi
+
+                    # ─ Snyk Code (SAST, SARIF) ─
+                    if [ -s "security-reports/snyk-code.sarif" ]; then
+                        curl -sf -X POST "${DD_URL}/api/v2/import-scan/" \
+                            -H "Authorization: Token ${DD_TOKEN}" \
+                            -F "scan_type=SARIF" \
+                            -F "engagement=${DD_ENGAGEMENT}" \
+                            -F "file=@security-reports/snyk-code.sarif" \
+                            -F "active=true" \
+                            -F "verified=false" \
+                            -F "close_old_findings=true" \
+                            -F "branch_tag=${BRANCH_SHORT}" \
+                            -F "build_id=${BUILD_NUMBER}" \
+                            > /dev/null && echo "Uploaded: snyk-code.sarif"
+                    else
+                        echo "No snyk-code.sarif to upload"
                     fi
                 '''
             }

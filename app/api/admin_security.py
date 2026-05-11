@@ -51,13 +51,30 @@ def _dd_get(path: str, params: Optional[dict] = None) -> dict:
 
 
 def _categorize(component_name: Optional[str], file_path: Optional[str], title: str) -> str:
-    """finding을 우리 도메인에 맞게 분류."""
+    """finding을 우리 도메인에 맞게 분류.
+
+    pip / npm / dockerfile : 의존성·인프라 미스컨피그 (Trivy fs)
+    sast                   : 코드 자체의 결함 (Snyk Code, SARIF) — file_path 가 소스 파일
+    dast                   : 실행 중 앱 결함 (ZAP) — file_path/title 이 URL 또는 HTTP 헤더 관련
+    other                  : 위 어느 것에도 안 잡힘
+    """
     fp = (file_path or "").lower()
     name = (component_name or "").lower()
     t = (title or "").lower()
+
+    # DAST: ZAP finding 은 file_path 에 URL 이 들어오거나 title 이 보안 헤더 키워드를 포함
+    if fp.startswith(("http://", "https://")) or "csp" in t or "csrf" in t or \
+       "x-frame" in t or "x-content-type" in t or "cookie" in t and "secure" in t or \
+       "clickjacking" in t or "cors" in t:
+        return "dast"
+
+    # SAST: Snyk Code 같은 SARIF 결과는 소스 파일 경로를 가짐
+    if fp.endswith((".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".rb", ".php")):
+        return "sast"
+
     if "dockerfile" in fp or "docker" in t or t.startswith("ds-"):
         return "dockerfile"
-    if "requirements" in fp or "python" in name or name in {"pillow", "python-jose", "python-multipart", "django"}:
+    if "requirements" in fp or "python" in name or name in {"pillow", "python-jose", "python-multipart", "django", "pyjwt"}:
         return "pip"
     if "package.json" in fp or "pnpm-lock" in fp or "node_modules" in fp or name in {"next", "lodash", "react"}:
         return "npm"
@@ -102,7 +119,7 @@ def get_summary(admin: User = Depends(get_current_admin)) -> dict:
     """
     summary = {s.lower(): 0 for s in SEVERITY_ORDER}
     summary["total"] = 0
-    by_category = {"pip": 0, "npm": 0, "dockerfile": 0, "other": 0}
+    by_category = {"pip": 0, "npm": 0, "dockerfile": 0, "sast": 0, "dast": 0, "other": 0}
     last_updated: Optional[str] = None
 
     # severity별 count는 limit=1 + count 필드로 빠르게
