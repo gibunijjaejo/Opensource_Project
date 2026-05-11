@@ -8,6 +8,7 @@ import {
     Package, FileCode, Container, MoreHorizontal,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { SecurityChatSidebar } from "@/components/features/security-chat-sidebar"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
@@ -119,7 +120,8 @@ export default function AdminSecurityPage() {
     }, [token, router, fetchAll])
 
     return (
-        <div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+            <div>
             {/* 헤더 */}
             <div className="mb-8 border-l-2 pl-4 flex items-start justify-between" style={{ borderColor: "#B0232A" }}>
                 <div>
@@ -257,6 +259,8 @@ export default function AdminSecurityPage() {
                     ))}
                 </div>
             )}
+            </div>
+            <SecurityChatSidebar />
         </div>
     )
 }
