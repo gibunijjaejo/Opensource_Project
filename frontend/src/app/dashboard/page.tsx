@@ -6,6 +6,7 @@ import Link from "next/link"
 import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
+import { TimetableGrid } from "@/components/features/timetable-grid"
 import type { Course } from "@/lib/constants/course-data"
 import { coursesApi, cartApi, usersApi, historyApi } from "@/lib/api"
 import { getCurrentSemester } from "@/lib/utils"
@@ -30,6 +31,9 @@ function mapApiCourse(c: ApiCourse): Course {
       .filter(Boolean)
       .join(" "),
     category: categoryMap[c.course_category ?? ""] ?? "일반선택",
+    days: c.class_days,
+    startTime: c.class_start_time,
+    endTime: c.class_end_time,
   }
 }
 
@@ -84,7 +88,16 @@ export default function DashboardPage() {
     cartItems.map((item) => [String(item.course_id), item.id])
   )
 
+  // 카드 표시용 (기존 정렬 유지)
   const wishlistedCourses = courses.filter((c) => wishlistIds.has(c.id))
+
+  // 시간표용: cart 추가 순서(id 오름차순)대로 정렬해서 같은 시간대면 최근 추가가 위로 렌더되도록.
+  const courseById = new Map(courses.map((c) => [c.id, c]))
+  const timetableCourses = cartItems
+    .slice()
+    .sort((a, b) => a.id - b.id)
+    .map((item) => courseById.get(String(item.course_id)))
+    .filter((c): c is Course => !!c)
 
   const addToWishlist = async (id: string) => {
     const token = localStorage.getItem("access_token")
@@ -203,7 +216,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="h-4 w-4" style={{ color: "#B0232A" }} />
-                  <span className="text-xs font-medium text-muted-foreground">전공 수업 이수 현황</span>
+                  <span className="text-xs font-medium text-muted-foreground">이수 현황</span>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
               </div>
@@ -284,6 +297,17 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
+          </section>
+
+          {/* Timetable Preview */}
+          <section>
+            <div className="mb-3">
+              <h2 className="text-base font-semibold text-foreground">내 시간표</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                관심 과목으로 추가하면 아래 시간표에 자동으로 표시됩니다.
+              </p>
+            </div>
+            <TimetableGrid courses={timetableCourses} />
           </section>
 
           {/* Wishlist Section */}

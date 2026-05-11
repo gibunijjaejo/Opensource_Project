@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { historyApi, coursesApi } from "@/lib/api"
+import { isMajorCourse } from "@/lib/constants/course-data"
 import type { HistoryItem, Course } from "@/types"
 
 const OCR_PENDING_KEY = "ocrPending"
@@ -214,10 +215,14 @@ export default function GraduationPage() {
   }
 
   // ── 그룹핑 ────────────────────────────────────────────
-  const totalCredits = histories.reduce(
-    (sum: number, h: HistoryItem) => sum + (h.course?.credits ?? 3),
-    0
-  )
+  const creditOf = (h: HistoryItem) => h.course?.credits ?? 3
+  const majorCredits = histories
+    .filter((h) => isMajorCourse(h.course_code))
+    .reduce((sum, h) => sum + creditOf(h), 0)
+  const liberalCredits = histories
+    .filter((h) => !isMajorCourse(h.course_code))
+    .reduce((sum, h) => sum + creditOf(h), 0)
+  const totalCredits = majorCredits + liberalCredits
 
   const groupMap = histories.reduce((acc: Record<string, SemesterGroup>, h: HistoryItem) => {
     const key = `${h.year ?? "null"}-${h.semester ?? "null"}`
@@ -275,11 +280,11 @@ export default function GraduationPage() {
         <div className="flex flex-col gap-8">
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
             <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              나의 전공 수업 이수 현황
+              나의 이수 현황
               <GraduationCap className="h-5 w-5" style={{ color: "#B0232A" }} />
             </h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
-              지금까지 이수한 전공 수업 과목과 총 학점을 확인하세요.
+              지금까지 이수한 전공·교양 과목과 학점을 확인하세요.
             </p>
           </div>
 
@@ -305,6 +310,9 @@ export default function GraduationPage() {
               <p className="text-3xl font-bold text-foreground">
                 {totalCredits}{" "}
                 <span className="text-sm font-normal text-muted-foreground">학점</span>
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                전공 {majorCredits} · 교양 {liberalCredits}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-card p-5">
