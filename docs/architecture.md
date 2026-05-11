@@ -26,7 +26,7 @@
 | BeautifulSoup4 | HTML 파싱 |
 | RapidFuzz | 이름 퍼지 매칭 (유사도 기반) |
 | passlib[bcrypt] | 비밀번호 해싱 (bcrypt==4.0.1 고정) |
-| python-jose | JWT 발급 및 검증 |
+| PyJWT | JWT 발급 및 검증 |
 
 ### 프론트엔드
 | 기술 | 용도 |

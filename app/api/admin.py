@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError
+from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
@@ -50,7 +50,7 @@ def get_current_admin(
 ) -> User:
     try:
         student_id = user_service.decode_token(credentials.credentials)
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
     user = db.query(User).filter(User.student_id == student_id).first()
     if not user or user.role != "admin":
