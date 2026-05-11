@@ -79,17 +79,47 @@ pipeline {
 
                     # 의존성(redis, ocr-service) 포함해 backend 기동.
                     # 외부 포트 매핑 없이 내부 network 만 사용 — ZAP 가 같은 network 로 붙어 호출.
-                    docker compose -p ${COMPOSE_PROJECT} -f docker-compose.yml up -d --build backend
+                    # 빌드 진척 출력은 quiet 로 줄여서 Jenkins 콘솔 50k 한계 회피.
+                    docker compose -p ${COMPOSE_PROJECT} -f docker-compose.yml up -d --build --quiet-pull backend 2>&1 | tail -20
 
-                    echo "backend health 대기..."
+                    echo ""
+                    echo "── 컨테이너 상태 ──"
+                    docker compose -p ${COMPOSE_PROJECT} ps
+
+                    echo ""
+                    echo "── backend health 대기 (최대 120초) ──"
+                    HEALTHY=0
                     for i in $(seq 1 60); do
-                        STATE=$(docker inspect -f '{{.State.Health.Status}}' ${COMPOSE_PROJECT}-backend-1 2>/dev/null || echo "starting")
-                        echo "  [$i/60] backend = $STATE"
+                        STATE=$(docker inspect -f '{{.State.Health.Status}}' ${COMPOSE_PROJECT}-backend-1 2>/dev/null || echo "missing")
                         if [ "$STATE" = "healthy" ]; then
+                            echo "  [$i/60] backend = healthy ✓"
+                            HEALTHY=1
                             break
+                        fi
+                        if [ $((i % 10)) -eq 0 ]; then
+                            echo "  [$i/60] backend = $STATE"
                         fi
                         sleep 2
                     done
+
+                    if [ "$HEALTHY" = "0" ]; then
+                        echo ""
+                        echo "⚠️ backend 가 healthy 되지 않음 — 진단 로그 출력"
+                        echo ""
+                        echo "── docker compose ps ──"
+                        docker compose -p ${COMPOSE_PROJECT} ps
+                        echo ""
+                        echo "── backend logs (last 50 lines) ──"
+                        docker logs ${COMPOSE_PROJECT}-backend-1 --tail 50 2>&1 || echo "(backend container not found)"
+                        echo ""
+                        echo "── ocr-service logs (last 20 lines) ──"
+                        docker logs ${COMPOSE_PROJECT}-ocr-service-1 --tail 20 2>&1 || echo "(ocr-service container not found)"
+                        echo ""
+                        echo "── redis logs (last 10 lines) ──"
+                        docker logs ${COMPOSE_PROJECT}-redis-1 --tail 10 2>&1 || echo "(redis container not found)"
+                        echo ""
+                        echo "ZAP 스캔은 계속 시도 — backend 가 일부라도 응답하면 baseline 결과 수집 가능"
+                    fi
                 '''
             }
         }
