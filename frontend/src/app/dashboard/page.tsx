@@ -216,7 +216,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="h-4 w-4" style={{ color: "#B0232A" }} />
-                  <span className="text-xs font-medium text-muted-foreground">전공 수업 이수 현황</span>
+                  <span className="text-xs font-medium text-muted-foreground">이수 현황</span>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
               </div>
