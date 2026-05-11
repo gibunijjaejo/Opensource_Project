@@ -209,7 +209,7 @@ export default function CommunityPage({ params }: Props) {
               <span>이전</span>
             </button>
             <Link
-              href="/"
+              href="/dashboard"
               className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
             >
               <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />

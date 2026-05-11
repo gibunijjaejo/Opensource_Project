@@ -6,8 +6,22 @@ env:
 on:
   push:
     branches: ["**"]
+    paths-ignore:
+      - ".github/workflows/**"
+      - "**/*.md"
+      - "docs/**"
+      - ".gitignore"
+      - ".env.example"
+      - "LICENSE"
   pull_request:
     branches: [dev, main]
+    paths-ignore:
+      - ".github/workflows/**"
+      - "**/*.md"
+      - "docs/**"
+      - ".gitignore"
+      - ".env.example"
+      - "LICENSE"
 
 jobs:
   # ── 1. 백엔드 Lint ────────────────────────────────────────────

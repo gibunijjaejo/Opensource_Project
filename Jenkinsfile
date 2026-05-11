@@ -102,6 +102,55 @@ pipeline {
             }
         }
 
+        // ── 4. 보안 스캔 (dev 전용) ──────────────────────────────────
+        stage('Security Scan') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
+            steps {
+                script { currentBuild.description = 'Security Scan' }
+                sh '''
+                    mkdir -p security-reports
+
+                    docker run --rm -v "$(pwd)":/src \
+                        aquasec/trivy:latest fs \
+                        --format json \
+                        --output /src/security-reports/trivy-fs.json \
+                        --severity HIGH,CRITICAL \
+                        --scanners vuln,secret,config \
+                        /src || true
+
+                    ls -la security-reports/
+                '''
+            }
+        }
+
+        // ── 4-2. DefectDojo로 결과 업로드 (dev 전용) ────────────────
+        stage('Upload to Defect Dojo') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
+            environment {
+                DD_URL        = 'http://163.239.77.65:8888'
+                DD_TOKEN      = credentials('defectdojo-token')
+                DD_ENGAGEMENT = '1'
+            }
+            steps {
+                sh '''
+                    if [ -s "security-reports/trivy-fs.json" ]; then
+                        curl -sf -X POST "${DD_URL}/api/v2/import-scan/" \
+                            -H "Authorization: Token ${DD_TOKEN}" \
+                            -F "scan_type=Trivy Scan" \
+                            -F "engagement=${DD_ENGAGEMENT}" \
+                            -F "file=@security-reports/trivy-fs.json" \
+                            -F "active=true" \
+                            -F "verified=false" \
+                            -F "branch_tag=${BRANCH_SHORT}" \
+                            -F "build_id=${BUILD_NUMBER}" \
+                            > /dev/null && echo "Uploaded: trivy-fs.json"
+                    else
+                        echo "No trivy-fs.json to upload"
+                    fi
+                '''
+            }
+        }
+
         // ── 5. 배포 전 점검 (main 전용) ──────────────────────────────
         stage('Pre-Deploy Check') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
@@ -114,12 +163,29 @@ pipeline {
         // ── 6. Docker 빌드 & 배포 (main 전용) ───────────────────────
         stage('Deploy') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
+            environment {
+                // Jenkins Credentials(Secret text)에서 API 키 주입.
+                // admin 챗 UI / 포트폴리오 AI 평가에서 사용.
+                GEMINI_API_KEY = credentials('gemini-api-key')
+                // ocr-service의 시간표/강의계획서 OCR에서 사용.
+                MISTRAL_API_KEY = credentials('mistral-api-key')
+            }
             steps {
                 script { currentBuild.description = 'Deploy' }
                 sh '''
+                    set +x
+                    # .env 파일에 API 키들 갱신 (기존 라인 제거 후 새로 추가)
+                    touch .env
+                    sed -i '/^GEMINI_API_KEY=/d' .env
+                    echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .env
+                    sed -i '/^MISTRAL_API_KEY=/d' .env
+                    echo "MISTRAL_API_KEY=${MISTRAL_API_KEY}" >> .env
+                    set -x
+
                     docker compose stop backend frontend ocr-service redis || true
                     docker compose rm -f backend frontend ocr-service redis || true
-                    docker compose up --build -d backend frontend ocr-service redis
+                    docker compose -f docker-compose.yml -f docker-compose.observability.app.yml \
+                        up --build -d backend frontend ocr-service redis promtail
                 '''
             }
         }

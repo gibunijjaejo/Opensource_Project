@@ -3,6 +3,48 @@
     "postgres": {
       "command": "node",
       "args": ["scripts/mcp-postgres.mjs"]
+    },
+    "seoganpyo": {
+      "command": ".venv-mcp/Scripts/python.exe",
+      "args": ["scripts/mcp_seoganpyo.py"]
+    },
+    "grafana": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--network=host",
+        "-e",
+        "GRAFANA_URL",
+        "-e",
+        "GRAFANA_API_KEY",
+        "mcp/grafana",
+        "-t",
+        "stdio"
+      ],
+      "env": {
+        "GRAFANA_URL": "http://localhost:3001",
+        "GRAFANA_API_KEY": "REPLACE_ME_WITH_SERVICE_ACCOUNT_TOKEN"
+      }
+    },
+    "docker": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-v",
+        "/var/run/docker.sock:/var/run/docker.sock",
+        "mcp/docker"
+      ]
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }

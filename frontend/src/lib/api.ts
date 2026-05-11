@@ -444,6 +444,41 @@ export const adminApi = {
       method: "PATCH",
       body: JSON.stringify({ new_password: newPassword }),
     }),
+
+  // 운영 어시스턴트 (Gemini tool use)
+  askAssistant: (message: string, history: AssistantMessage[] = []) =>
+    adminRequest<AssistantAskResponse>("/admin/chat/ask", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
+
+  listAssistantTools: () =>
+    adminRequest<AssistantToolMeta[]>("/admin/chat/tools"),
+}
+
+export interface AssistantMessage {
+  role: "user" | "model"
+  content: string
+}
+
+export interface AssistantToolCall {
+  name: string
+  args: Record<string, unknown>
+  result: unknown
+  duration_ms: number
+}
+
+export interface AssistantAskResponse {
+  answer: string
+  tool_calls: AssistantToolCall[]
+  iterations: number
+  model: string
+}
+
+export interface AssistantToolMeta {
+  name: string
+  description: string
+  params: Record<string, { type: string; required?: boolean; description: string }>
 }
 
 // ── Portfolio ─────────────────────────────────────────

@@ -41,11 +41,23 @@ services:
         volumes:
             - ./data:/app/data
             - ./static:/app/static
+            # admin 챗 운영 어시스턴트가 docker ps/stats를 호출 가능하도록 호스트 소켓 마운트.
+            # ⚠️ 단일 호스트 시연 환경 전용 — 컨테이너에서 호스트 docker 제어 가능.
+            - /var/run/docker.sock:/var/run/docker.sock
         env_file:
             - .env
         environment:
             - REDIS_URL=redis://redis:6379/0
             - OCR_SERVICE_URL=http://ocr-service:8000
+            # Prometheus URL — .env에서 override 가능.
+            # 디폴트: 같은 호스트에 make up-obs로 띄운 prometheus (docker network).
+            # 외부 모니터링 서버 사용 시 .env에 PROMETHEUS_URL=http://<IP>:9090 설정.
+            - PROMETHEUS_URL=${PROMETHEUS_URL:-http://prometheus:9090}
+            # DefectDojo 보안 대시보드 — 관리자 페이지의 보안 모니터링이 호출.
+            # 토큰은 .env 또는 Jenkins Credentials에서 주입 (절대 하드코딩 금지).
+            - DEFECTDOJO_URL=${DEFECTDOJO_URL:-http://163.239.77.65:8888}
+            - DEFECTDOJO_TOKEN=${DEFECTDOJO_TOKEN:-}
+            - DEFECTDOJO_ENGAGEMENT=${DEFECTDOJO_ENGAGEMENT:-1}
         command:
             [
                 "uvicorn",

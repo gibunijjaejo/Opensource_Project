@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { BookOpen, LayoutDashboard, Users, Flag, Activity, GraduationCap, FileText, LogOut, MessageSquare, Lock } from "lucide-react"
+import { BookOpen, LayoutDashboard, Users, Flag, Activity, GraduationCap, FileText, LogOut, MessageSquare, Lock, Sparkles, ShieldAlert } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
@@ -79,6 +79,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/professors", label: "교수 데이터", icon: GraduationCap, exact: false, badge: 0 },
     { href: "/admin/lectures", label: "강의계획서", icon: FileText, exact: false, badge: 0 },
     { href: "/admin/monitoring", label: "모니터링", icon: Activity, exact: false, badge: 0 },
+    { href: "/admin/security", label: "보안 모니터링", icon: ShieldAlert, exact: false, badge: 0 },
+    { href: "/admin/assistant", label: "운영 어시스턴트", icon: Sparkles, exact: false, badge: 0 },
   ]
 
   return (

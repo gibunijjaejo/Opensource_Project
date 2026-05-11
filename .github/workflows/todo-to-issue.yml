@@ -1,0 +1,49 @@
+name: TODO to Issue
+
+# 코드에 // TODO 또는 # TODO 주석을 추가하면 자동으로 이슈로 등록한다.
+# 주석을 삭제하거나 수정하면 자동으로 이슈가 닫힌다.
+#
+# 사용 예시:
+#   # TODO: portfolio 평가 백그라운드 잡을 Celery로 이관
+#   // TODO (hayeon): N+1 쿼리 최적화 필요
+#   # FIXME: race condition 가능성 있음
+
+on:
+    push:
+        branches: [dev, main]
+
+jobs:
+    todo:
+        name: TODO/FIXME 추출 → 이슈 생성
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - uses: alstr/todo-to-issue-action@v5
+              with:
+                  CLOSE_ISSUES: true
+                  AUTO_ASSIGN: true
+                  IDENTIFIERS: '[{"name": "TODO", "labels": ["todo"]}, {"name": "FIXME", "labels": ["bug", "fixme"]}, {"name": "HACK", "labels": ["tech-debt"]}]'
+                  ESCAPE: true
+                  # 워크플로우/문서 파일은 스캔 제외 (자기 자신의 주석 잡지 않게)
+                  # IGNORE는 regex 패턴 (콤마로 구분)
+                  IGNORE: '\.github/,docs/,specs/,.*\.md$'
+                  ISSUE_TEMPLATE: |
+                      **위치:** {{ url }}
+                      **라인:** {{ line }}
+
+                      ## 내용
+                      {{ body }}
+
+                      ## 코드 컨텍스트
+                      ```{{ language }}
+                      {{ snippet }}
+                      ```
+
+                      ---
+                      자동 생성된 이슈입니다. 코드의 주석을 삭제하면 자동으로 닫힙니다.
