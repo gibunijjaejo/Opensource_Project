@@ -45,6 +45,7 @@ export interface Professor {
   professor_id: number
   name: string
   lab: string | null
+  department: string | null
   details: ProfessorDetail | null
 }
 

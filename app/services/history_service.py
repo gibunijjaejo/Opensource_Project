@@ -171,9 +171,7 @@ def save_histories(
     year: Optional[int] = None,
     semester: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    전공으로 판정된 과목만 histories에 저장합니다.
-    """
+    """OCR 매칭 결과를 histories 에 저장한다. 전공/교양 구분 없이 전체 매칭 풀에서 들어온 결과를 모두 저장."""
     saved_rows: List[Dict[str, Any]] = []
 
     for item in matched_courses:
