@@ -141,6 +141,7 @@ pipeline {
                             -F "file=@security-reports/trivy-fs.json" \
                             -F "active=true" \
                             -F "verified=false" \
+                            -F "close_old_findings=true" \
                             -F "branch_tag=${BRANCH_SHORT}" \
                             -F "build_id=${BUILD_NUMBER}" \
                             > /dev/null && echo "Uploaded: trivy-fs.json"
