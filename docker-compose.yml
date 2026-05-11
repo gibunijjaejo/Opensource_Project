@@ -12,7 +12,7 @@ services:
             timeout: 5s
             retries: 5
 
-    # PaddleOCR 마이크로서비스 (이미지 → 텍스트 블록)
+    # Mistral Pixtral OCR 마이크로서비스 (이미지 → 강의명 추출)
     ocr-service:
         build:
             context: ./ocr-service
