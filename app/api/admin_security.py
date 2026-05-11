@@ -50,6 +50,20 @@ def _dd_get(path: str, params: Optional[dict] = None) -> dict:
         raise HTTPException(503, "DefectDojo 서버에 연결할 수 없습니다.")
 
 
+# ZAP 룰 이름에 자주 등장하는 키워드 — DAST 분류용.
+# "secure" 같은 광범위 단어는 Trivy/Dockerfile finding 과 충돌하므로 제외.
+_DAST_TITLE_KEYWORDS = (
+    "csp", "csrf", "x-frame", "x-content-type", "x-xss",
+    "clickjacking", "cors", "cross-origin", "cross-domain",
+    "cookie", "cacheable", "storable", "hsts",
+    "referrer policy", "permissions policy", "same-site",
+    "tabnabbing", "session id in url", "viewstate", "anti-csrf",
+)
+
+# Trivy Dockerfile 룰 ID 접두사 (DS-NNNN). 추가로 "best practice" 키워드 등도 가능.
+_DOCKERFILE_TITLE_KEYWORDS = ("dockerfile", "image build", "best practice")
+
+
 def _categorize(component_name: Optional[str], file_path: Optional[str], title: str) -> str:
     """finding을 우리 도메인에 맞게 분류.
 
@@ -62,17 +76,15 @@ def _categorize(component_name: Optional[str], file_path: Optional[str], title: 
     name = (component_name or "").lower()
     t = (title or "").lower()
 
-    # DAST: ZAP finding 은 file_path 에 URL 이 들어오거나 title 이 보안 헤더 키워드를 포함
-    if fp.startswith(("http://", "https://")) or "csp" in t or "csrf" in t or \
-       "x-frame" in t or "x-content-type" in t or "cookie" in t and "secure" in t or \
-       "clickjacking" in t or "cors" in t:
+    # DAST: ZAP finding 은 file_path 에 URL 이 들어오거나 title 이 ZAP 룰 키워드를 포함.
+    if fp.startswith(("http://", "https://")) or any(kw in t for kw in _DAST_TITLE_KEYWORDS):
         return "dast"
 
-    # SAST: Snyk Code 같은 SARIF 결과는 소스 파일 경로를 가짐
+    # SAST: Snyk Code 같은 SARIF 결과는 소스 파일 경로를 가짐.
     if fp.endswith((".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".rb", ".php")):
         return "sast"
 
-    if "dockerfile" in fp or "docker" in t or t.startswith("ds-"):
+    if "dockerfile" in fp or t.startswith("ds-") or any(kw in t for kw in _DOCKERFILE_TITLE_KEYWORDS):
         return "dockerfile"
     if "requirements" in fp or "python" in name or name in {"pillow", "python-jose", "python-multipart", "django", "pyjwt"}:
         return "pip"
@@ -135,12 +147,14 @@ def get_summary(admin: User = Depends(get_current_admin)) -> dict:
         summary[severity.lower()] = count
         summary["total"] += count
 
-    # 카테고리 분류 + 최근 업데이트는 finding 일부 조회로 추론
+    # 카테고리 분류 + 최근 업데이트는 active finding 전체에서 산정.
+    # limit=1000 으로 충분히 큰 페이지 — Trivy 결과가 많아도 SAST/DAST 가 컷오프되지 않게.
+    # 1000 건 넘으면 응답 시간 영향 있으니 추후 페이지네이션 도입 검토.
     data = _dd_get("/api/v2/findings/", {
         "engagement": DD_ENGAGEMENT,
         "active": "true",
         "is_mitigated": "false",
-        "limit": 100,
+        "limit": 1000,
     })
     for f in data.get("results", []):
         cat = _categorize(f.get("component_name"), f.get("file_path"), f.get("title", ""))
@@ -161,12 +175,19 @@ def get_findings(
     limit: int = Query(50, ge=1, le=200),
     admin: User = Depends(get_current_admin),
 ) -> dict:
-    """발견된 취약점 리스트. severity·category로 필터 가능."""
+    """발견된 취약점 리스트. severity·category로 필터 가능.
+
+    DefectDojo API 는 category 필터를 제공하지 않으므로 클라이언트(=백엔드)에서 필터링.
+    category 필터가 있으면 DefectDojo 에서 1000건까지 받아 분류 후 limit 만큼 잘라 반환 —
+    Trivy high 결과가 많을 때 ZAP/Snyk 같은 후순위 카테고리가 컷오프 되지 않도록.
+    """
+    fetch_size = 1000 if category else limit
+
     params = {
         "engagement": DD_ENGAGEMENT,
         "active": "true",
         "is_mitigated": "false",
-        "limit": limit,
+        "limit": fetch_size,
         "ordering": "numerical_severity",  # Critical → Info 순
     }
     if severity:
@@ -176,6 +197,7 @@ def get_findings(
     items = [_format_finding(f) for f in data.get("results", [])]
     if category:
         items = [it for it in items if it["category"] == category]
+    items = items[:limit]
     return {"count": len(items), "items": items}
 
 

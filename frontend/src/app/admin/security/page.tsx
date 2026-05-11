@@ -6,6 +6,7 @@ import {
     ShieldAlert, Loader2, ExternalLink, RefreshCw,
     AlertTriangle, AlertOctagon, Info, CheckCircle2,
     Package, FileCode, Container, MoreHorizontal,
+    Bug, Globe,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SecurityChatSidebar } from "@/components/features/security-chat-sidebar"
@@ -25,7 +26,7 @@ type Summary = {
     low: number
     info: number
     total: number
-    by_category: { pip: number; npm: number; dockerfile: number; other: number }
+    by_category: { pip: number; npm: number; dockerfile: number; sast: number; dast: number; other: number }
     last_updated: string | null
     engagement_url: string
 }
@@ -46,18 +47,20 @@ type Finding = {
     is_mitigated: boolean
     risk_accepted: boolean
     dd_url: string
-    category: "pip" | "npm" | "dockerfile" | "other" | string
+    category: "pip" | "npm" | "dockerfile" | "sast" | "dast" | "other" | string
 }
 
 type Health = { connected: boolean; reason?: string; url?: string; engagement_id?: number }
 
 const SEVERITY_TABS = ["전체", "Critical", "High", "Medium", "Low"] as const
 const CATEGORY_TABS = [
-    { key: "all",        label: "전체",       icon: ShieldAlert },
-    { key: "pip",        label: "Python 의존성", icon: Package },
+    { key: "all",        label: "전체",            icon: ShieldAlert },
+    { key: "pip",        label: "Python 의존성",   icon: Package },
     { key: "npm",        label: "Frontend 의존성", icon: FileCode },
-    { key: "dockerfile", label: "Dockerfile",  icon: Container },
-    { key: "other",      label: "기타",       icon: MoreHorizontal },
+    { key: "dockerfile", label: "Dockerfile",      icon: Container },
+    { key: "sast",       label: "코드 결함 (SAST)", icon: Bug },
+    { key: "dast",       label: "실행 결함 (DAST)", icon: Globe },
+    { key: "other",      label: "기타",            icon: MoreHorizontal },
 ] as const
 
 const SEVERITY_STYLE: Record<string, { bg: string; border: string; text: string; chip: string; icon: React.ElementType }> = {
@@ -72,6 +75,8 @@ const CATEGORY_LABEL: Record<string, string> = {
     pip:        "Python 의존성",
     npm:        "Frontend 의존성",
     dockerfile: "Dockerfile",
+    sast:       "코드 결함 (SAST)",
+    dast:       "실행 결함 (DAST)",
     other:      "기타",
 }
 
@@ -174,10 +179,12 @@ export default function AdminSecurityPage() {
                     <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
                         영역별 분포
                     </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                         <CategoryRow label="Python 의존성"   count={summary.by_category.pip}        icon={Package}            color="#3B82F6" />
                         <CategoryRow label="Frontend 의존성" count={summary.by_category.npm}        icon={FileCode}           color="#10B981" />
                         <CategoryRow label="Dockerfile"      count={summary.by_category.dockerfile} icon={Container}          color="#F59E0B" />
+                        <CategoryRow label="코드 결함 (SAST)" count={summary.by_category.sast}      icon={Bug}                color="#A855F7" />
+                        <CategoryRow label="실행 결함 (DAST)" count={summary.by_category.dast}      icon={Globe}              color="#EC4899" />
                         <CategoryRow label="기타"            count={summary.by_category.other}      icon={MoreHorizontal}     color="#6B7280" />
                     </div>
                 </div>
