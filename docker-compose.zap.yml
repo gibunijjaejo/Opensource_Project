@@ -1,0 +1,27 @@
+# nightly ZAP 스캔 전용 compose override.
+#
+# 운영 docker-compose.yml 의 container_name(seoganpyo-*) 이 하드코딩이라
+# 같은 호스트에 운영 컨테이너가 떠있을 때 `-p zapscan` 만으로는 분리 안 됨.
+# 이 override 가 ZAP 빌드에서만 컨테이너 이름을 zapscan-* 로 갈아 끼움 →
+# 운영 컨테이너와 격리.
+#
+# 사용: docker compose -p zapscan -f docker-compose.yml -f docker-compose.zap.yml up -d --build --no-deps backend redis
+
+services:
+    redis:
+        container_name: zapscan-redis
+        # 운영 6379 포트 충돌 방지를 위해 포트 매핑 제거 (내부 network 만 사용)
+        ports: !reset []
+
+    ocr-service:
+        # ZAP 스캔에서는 OCR 불필요 — 가벼운 alpine 이미지로 대체해 빠르게 healthy 만 되게.
+        # backend 의 depends_on(ocr-service healthy) 조건을 충족시키기 위함.
+        # (--no-deps 로 띄우지 않더라도 backend 의 healthcheck 가 ocr-service 를 호출하진 않음)
+        container_name: zapscan-ocr
+        ports: !reset []
+
+    backend:
+        container_name: zapscan-api
+        # 운영 8080 포트와 충돌하지 않도록 포트 매핑 제거 (ZAP 가 같은 network 내부에서 호출)
+        ports: !reset []
+        # ZAP target 으로 인식할 컨테이너 이름이 zapscan-api 가 되도록 컨테이너 이름은 위에서 고정.

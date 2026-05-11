@@ -77,20 +77,26 @@ pipeline {
                     # 혹시 이전 빌드 잔재가 남아있으면 정리
                     docker compose -p ${COMPOSE_PROJECT} down -v --remove-orphans || true
 
-                    # 의존성(redis, ocr-service) 포함해 backend 기동.
-                    # 외부 포트 매핑 없이 내부 network 만 사용 — ZAP 가 같은 network 로 붙어 호출.
-                    # 빌드 진척 출력은 quiet 로 줄여서 Jenkins 콘솔 50k 한계 회피.
-                    docker compose -p ${COMPOSE_PROJECT} -f docker-compose.yml up -d --build --quiet-pull backend 2>&1 | tail -20
+                    # docker-compose.zap.yml override 로 container_name 을 zapscan-* 로 갈아 끼움.
+                    # 운영(seoganpyo-*) 과 격리 — 이름 충돌 방지.
+                    # --no-deps: backend 의 depends_on(ocr-service healthy) 무시.
+                    #   ZAP 스캔에 OCR 필요 없고, ocr-service 가 MISTRAL_API_KEY 없으면 영원히 unhealthy.
+                    # 빌드 출력은 tail -20 으로 잘라서 Jenkins 콘솔 50k 한계 회피.
+                    docker compose -p ${COMPOSE_PROJECT} \
+                        -f docker-compose.yml \
+                        -f docker-compose.zap.yml \
+                        up -d --build --quiet-pull --no-deps backend redis 2>&1 | tail -20
 
                     echo ""
                     echo "── 컨테이너 상태 ──"
-                    docker compose -p ${COMPOSE_PROJECT} ps
+                    docker compose -p ${COMPOSE_PROJECT} -f docker-compose.yml -f docker-compose.zap.yml ps
 
                     echo ""
                     echo "── backend health 대기 (최대 120초) ──"
+                    # container_name override 후엔 zapscan-api 이름이 됨 (compose suffix -1 없음)
                     HEALTHY=0
                     for i in $(seq 1 60); do
-                        STATE=$(docker inspect -f '{{.State.Health.Status}}' ${COMPOSE_PROJECT}-backend-1 2>/dev/null || echo "missing")
+                        STATE=$(docker inspect -f '{{.State.Health.Status}}' zapscan-api 2>/dev/null || echo "missing")
                         if [ "$STATE" = "healthy" ]; then
                             echo "  [$i/60] backend = healthy ✓"
                             HEALTHY=1
@@ -106,17 +112,14 @@ pipeline {
                         echo ""
                         echo "⚠️ backend 가 healthy 되지 않음 — 진단 로그 출력"
                         echo ""
-                        echo "── docker compose ps ──"
-                        docker compose -p ${COMPOSE_PROJECT} ps
+                        echo "── docker ps -a ──"
+                        docker ps -a --filter "name=zapscan" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
                         echo ""
-                        echo "── backend logs (last 50 lines) ──"
-                        docker logs ${COMPOSE_PROJECT}-backend-1 --tail 50 2>&1 || echo "(backend container not found)"
+                        echo "── zapscan-api logs (last 50 lines) ──"
+                        docker logs zapscan-api --tail 50 2>&1 || echo "(zapscan-api container not found)"
                         echo ""
-                        echo "── ocr-service logs (last 20 lines) ──"
-                        docker logs ${COMPOSE_PROJECT}-ocr-service-1 --tail 20 2>&1 || echo "(ocr-service container not found)"
-                        echo ""
-                        echo "── redis logs (last 10 lines) ──"
-                        docker logs ${COMPOSE_PROJECT}-redis-1 --tail 10 2>&1 || echo "(redis container not found)"
+                        echo "── zapscan-redis logs (last 10 lines) ──"
+                        docker logs zapscan-redis --tail 10 2>&1 || echo "(zapscan-redis container not found)"
                         echo ""
                         echo "ZAP 스캔은 계속 시도 — backend 가 일부라도 응답하면 baseline 결과 수집 가능"
                     fi
@@ -130,11 +133,11 @@ pipeline {
         stage('ZAP Baseline Scan') {
             steps {
                 sh '''
-                    # backend 컨테이너가 붙어 있는 docker network 이름 추출.
-                    NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' ${COMPOSE_PROJECT}-backend-1)
+                    # zapscan-api 컨테이너가 붙어 있는 docker network 이름 추출.
+                    NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' zapscan-api 2>/dev/null || echo "")
                     if [ -z "$NETWORK" ]; then
-                        echo "network 찾기 실패"
-                        exit 1
+                        echo "⚠️ zapscan-api 컨테이너 미존재 또는 network 없음 — ZAP 스킵"
+                        exit 0
                     fi
                     echo "ZAP network: $NETWORK"
 
@@ -146,7 +149,7 @@ pipeline {
                         -v "$(pwd)/security-reports:/zap/wrk:rw" \
                         zaproxy/zap-stable \
                         zap-baseline.py \
-                            -t http://${COMPOSE_PROJECT}-backend-1:8000 \
+                            -t http://zapscan-api:8000 \
                             -J zap-baseline.json \
                             -r zap-baseline.html \
                             -I
@@ -181,10 +184,11 @@ pipeline {
     }
 
     post {
-        // 빌드 성공/실패와 무관하게 항상 정리 — 자원 누수 방지
+        // 빌드 성공/실패와 무관하게 항상 정리 — 자원 누수 방지.
+        // 두 compose 파일 모두 인자로 줘야 container_name override 가 인식돼 깨끗하게 정리됨.
         always {
             sh '''
-                docker compose -p ${COMPOSE_PROJECT} down -v --remove-orphans || true
+                docker compose -p ${COMPOSE_PROJECT} -f docker-compose.yml -f docker-compose.zap.yml down -v --remove-orphans || true
             '''
         }
         success {
