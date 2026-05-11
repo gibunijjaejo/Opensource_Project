@@ -149,12 +149,15 @@ pipeline {
                     # ZAP baseline — 결과는 /zap/wrk 마운트 디렉토리(=workspace/security-reports)에 저장.
                     # -t 대상: 같은 network 안의 backend 컨테이너 이름:포트
                     # -I : passive scan 중 alert 있어도 exit 0 으로 (빌드 계속)
+                    # DefectDojo 'ZAP Scan' importer 는 XML 형식만 받음 → -x 로 XML 출력.
+                    # JSON / HTML 도 추가로 만들어둠 (디버깅·아카이빙 용).
                     docker run --rm \
                         --network "$NETWORK" \
                         -v "$(pwd)/security-reports:/zap/wrk:rw" \
                         zaproxy/zap-stable \
                         zap-baseline.py \
                             -t http://zapscan-api:8000 \
+                            -x zap-baseline.xml \
                             -J zap-baseline.json \
                             -r zap-baseline.html \
                             -I
@@ -168,19 +171,19 @@ pipeline {
         stage('Upload ZAP to Defect Dojo') {
             steps {
                 sh '''
-                    if [ ! -s "security-reports/zap-baseline.json" ]; then
-                        echo "zap-baseline.json 없음 — 스캔 실패 가능, 업로드 스킵"
+                    if [ ! -s "security-reports/zap-baseline.xml" ]; then
+                        echo "zap-baseline.xml 없음 — 스캔 실패 가능, 업로드 스킵"
                         exit 0
                     fi
 
-                    # 진단 모드: -sf 대신 -s -w 로 HTTP 코드 + 응답 body 출력.
-                    # DefectDojo 가 4xx 반환 시 어떤 필드/값이 문제인지 알 수 있음.
+                    # 진단 모드: HTTP 코드 + 응답 body 출력.
+                    # DefectDojo 의 ZAP Scan importer 는 XML 형식만 받음.
                     HTTP_CODE=$(curl -s -o /tmp/dd-response.txt -w "%{http_code}" \
                         -X POST "${DD_URL}/api/v2/import-scan/" \
                         -H "Authorization: Token ${DD_TOKEN}" \
                         -F "scan_type=ZAP Scan" \
                         -F "engagement=${DD_ENGAGEMENT}" \
-                        -F "file=@security-reports/zap-baseline.json" \
+                        -F "file=@security-reports/zap-baseline.xml" \
                         -F "active=true" \
                         -F "verified=false" \
                         -F "close_old_findings=true" \
@@ -195,7 +198,7 @@ pipeline {
 
                     case "$HTTP_CODE" in
                         200|201)
-                            echo "✓ Uploaded: zap-baseline.json"
+                            echo "✓ Uploaded: zap-baseline.xml"
                             ;;
                         *)
                             echo "✗ Upload 실패 (HTTP $HTTP_CODE)"
