@@ -1,5 +1,7 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import { X } from "lucide-react"
 import type { Course } from "@/lib/constants/course-data"
 
 const DAYS = ["월", "화", "수", "목", "금", "토", "일"] as const
@@ -62,10 +64,22 @@ function buildBlocks(courses: Course[]): Block[] {
   return blocks
 }
 
-export function TimetableGrid({ courses }: { courses: Course[] }) {
+interface TimetableGridProps {
+  courses: Course[]
+  /** 옵셔널 — 주어지면 블록 클릭 시 ✕ 버튼이 나타나 제거 가능. 비교 모달 등에선 미전달. */
+  onRemoveCourse?: (courseId: string) => void
+}
+
+export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
   const blocks = buildBlocks(courses)
   const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i)
   const gridHeight = (END_HOUR - START_HOUR) * ROW_HEIGHT
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
+
+  // 강의 목록이 바뀌면 선택 상태 초기화 (제거 후 다른 강의가 선택된 채로 남지 않게)
+  useEffect(() => {
+    setSelectedCourseId(null)
+  }, [courses.length])
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -122,17 +136,26 @@ export function TimetableGrid({ courses }: { courses: Course[] }) {
                 const top = (b.startH - START_HOUR) * ROW_HEIGHT
                 const height = (b.endH - b.startH) * ROW_HEIGHT
                 const color = pickColor(b.course.id)
+                const isSelected = selectedCourseId === b.course.id
+                const canRemove = !!onRemoveCourse
                 return (
                   <div
                     key={`${b.course.id}-${b.dayIdx}`}
-                    className="absolute left-1 right-1 rounded-md px-1.5 py-1 text-[11px] leading-tight overflow-hidden"
+                    onClick={() => {
+                      if (!canRemove) return
+                      setSelectedCourseId(isSelected ? null : b.course.id)
+                    }}
+                    className={`absolute left-1 right-1 rounded-md px-1.5 py-1 text-[11px] leading-tight overflow-hidden transition-all ${
+                      canRemove ? "cursor-pointer" : ""
+                    } ${isSelected ? "ring-2 ring-offset-1" : ""}`}
                     style={{
                       top,
                       height,
                       backgroundColor: color.bg,
                       color: color.fg,
+                      ...(isSelected ? { boxShadow: "0 0 0 2px #B0232A" } : {}),
                     }}
-                    title={`${b.course.name} (${b.course.code})`}
+                    title={`${b.course.name} (${b.course.code})${canRemove ? " — 클릭해서 제거" : ""}`}
                   >
                     <div className="font-semibold break-words [overflow-wrap:anywhere]">
                       {b.course.name}
@@ -140,6 +163,22 @@ export function TimetableGrid({ courses }: { courses: Course[] }) {
                     <div className="break-words opacity-80 [overflow-wrap:anywhere]">
                       {b.course.code}
                     </div>
+
+                    {/* 클릭 시 ✕ 제거 버튼 오버레이 */}
+                    {isSelected && onRemoveCourse && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onRemoveCourse(b.course.id)
+                          setSelectedCourseId(null)
+                        }}
+                        className="absolute inset-x-1 bottom-1 flex items-center justify-center gap-1 rounded bg-white/95 px-1.5 py-1 text-[10px] font-semibold shadow-sm hover:bg-white"
+                        style={{ color: "#B0232A" }}
+                      >
+                        <X className="h-3 w-3" />
+                        제거
+                      </button>
+                    )}
                   </div>
                 )
               })}
