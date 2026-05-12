@@ -3,6 +3,7 @@ import { Noto_Sans_KR } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { QueryProvider } from "@/components/layout/query-provider";
 import { AdminMessageModal } from "@/components/features/admin-message-modal";
 
 const notoSansKR = Noto_Sans_KR({
@@ -33,14 +34,16 @@ export default function RootLayout({
     return (
         <html lang="ko" suppressHydrationWarning className={`${notoSansKR.variable} ${logoFont.variable}`}>
             <body className="font-sans antialiased">
-                <ThemeProvider
-                    attribute="class"
-                    defaultTheme="light"
-                    enableSystem={false}
-                >
-                    {children}
-                    <AdminMessageModal />
-                </ThemeProvider>
+                <QueryProvider>
+                    <ThemeProvider
+                        attribute="class"
+                        defaultTheme="light"
+                        enableSystem={false}
+                    >
+                        {children}
+                        <AdminMessageModal />
+                    </ThemeProvider>
+                </QueryProvider>
             </body>
         </html>
     );

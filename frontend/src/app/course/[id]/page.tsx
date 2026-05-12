@@ -23,6 +23,7 @@ import { getCurrentSemester } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { coursesApi } from "@/lib/api";
+import { isMajorCourse } from "@/lib/constants/course-data";
 import type { Course } from "@/types";
 
 // ─── 트랙명 매핑 ─────────────────────────────────────────────────────────────
@@ -320,7 +321,8 @@ export default function CourseDetailPage({ params }: Props) {
                             </div>
                         </div>
 
-                        {/* ── 탭 네비게이션 (강의계획서 / 교수 및 연구실) ────── */}
+                        {/* ── 탭 네비게이션 — 전공(CSE)만 노출. 교양은 강의계획서·교수 데이터 없음. ── */}
+                        {isMajorCourse(course.course_code) ? (
                         <div className="flex flex-col gap-6">
                             <div className="flex border-b border-border">
                                 <button
@@ -536,6 +538,13 @@ export default function CourseDetailPage({ params }: Props) {
                                 </div>
                             )}
                         </div>
+                        ) : (
+                        <div className="rounded-md border border-border bg-muted/30 p-5 text-center">
+                            <p className="text-sm text-muted-foreground">
+                                교양 과목은 강의계획서·교수 정보를 제공하지 않습니다.
+                            </p>
+                        </div>
+                        )}
                     </div>
                 )}
             </main>

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { X, FileText, UserCircle, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { Course } from "@/lib/constants/course-data"
+import { type Course, isMajorCourse } from "@/lib/constants/course-data"
 
 interface WishlistCardProps {
   course: Course
@@ -43,31 +43,34 @@ export function WishlistCard({ course, onRemove }: WishlistCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 pt-1 border-t border-border">
-        <Button
-          asChild
-          size="sm"
-          className="h-7 flex-1 gap-1.5 text-xs font-medium"
-          style={{ backgroundColor: "#B0232A", color: "#fff" }}
-        >
-          <Link href={`/course/${course.id}?tab=syllabus`}>
-            <FileText className="h-3 w-3" />
-            강의계획서
-          </Link>
-        </Button>
-        <Button
-          asChild
-          variant="outline"
-          size="sm"
-          className="h-7 flex-1 gap-1.5 text-xs font-medium border-border hover:bg-accent"
-          style={{ color: "#B0232A", borderColor: "#B0232A" } as React.CSSProperties}
-        >
-          <Link href={`/course/${course.id}?tab=professor`}>
-            <UserCircle className="h-3 w-3" />
-            교수 프로필
-          </Link>
-        </Button>
-      </div>
+      {/* 교양 과목은 강의계획서/교수 프로필 데이터가 없어 액션 버튼을 노출하지 않는다. */}
+      {isMajorCourse(course.code) && (
+        <div className="flex items-center gap-2 pt-1 border-t border-border">
+          <Button
+            asChild
+            size="sm"
+            className="h-7 flex-1 gap-1.5 text-xs font-medium"
+            style={{ backgroundColor: "#B0232A", color: "#fff" }}
+          >
+            <Link href={`/course/${course.id}?tab=syllabus`}>
+              <FileText className="h-3 w-3" />
+              강의계획서
+            </Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="h-7 flex-1 gap-1.5 text-xs font-medium border-border hover:bg-accent"
+            style={{ color: "#B0232A", borderColor: "#B0232A" } as React.CSSProperties}
+          >
+            <Link href={`/course/${course.id}?tab=professor`}>
+              <UserCircle className="h-3 w-3" />
+              교수 프로필
+            </Link>
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

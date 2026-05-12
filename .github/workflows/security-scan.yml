@@ -25,6 +25,9 @@ jobs:
     scan:
         name: Trivy 스캔 + 이슈 생성
         runs-on: ubuntu-latest
+        # fork 저장소는 기본적으로 Issues 기능이 꺼져 있어 issues.create 가 실패함.
+        # 보안 이슈는 upstream 한 곳에서만 추적해야 의미 있으므로 fork 에서는 워크플로우 자체를 스킵.
+        if: github.repository == 'gibunijjaejo/Opensource_Project'
         permissions:
             issues: write
             contents: read

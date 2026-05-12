@@ -37,7 +37,7 @@
 
 **완료 조건**
 
-- jpg/jpeg/png 업로드 → PaddleOCR → 과목 자동 매칭
+- jpg/jpeg/png 업로드 → Mistral Pixtral OCR → 과목 자동 매칭
 - 매칭된 과목이 수강이력에 자동 저장
 - 업로드 즉시 202 반환 (비동기 처리)
 

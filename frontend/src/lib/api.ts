@@ -103,10 +103,19 @@ export const authApi = {
 
 // ── Courses ───────────────────────────────────────────
 export const coursesApi = {
-  list: (params?: { q?: string; category?: string; year?: number; semester?: number; limit?: number; offset?: number }) => {
+  list: (params?: {
+    q?: string
+    category?: string
+    division?: "major" | "liberal"
+    year?: number
+    semester?: number
+    limit?: number
+    offset?: number
+  }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set("q", params.q)
     if (params?.category) qs.set("category", params.category)
+    if (params?.division) qs.set("division", params.division)
     if (params?.year) qs.set("year", String(params.year))
     if (params?.semester) qs.set("semester", String(params.semester))
     if (params?.limit) qs.set("limit", String(params.limit))
@@ -454,6 +463,16 @@ export const adminApi = {
 
   listAssistantTools: () =>
     adminRequest<AssistantToolMeta[]>("/admin/chat/tools"),
+
+  // 보안 모니터링 사이드바 챗 (Gemini tool use, DefectDojo 전용 도구 5개)
+  askSecurityChat: (message: string, history: AssistantMessage[] = []) =>
+    adminRequest<AssistantAskResponse>("/admin/security/chat/ask", {
+      method: "POST",
+      body: JSON.stringify({ message, history }),
+    }),
+
+  listSecurityChatTools: () =>
+    adminRequest<AssistantToolMeta[]>("/admin/security/chat/tools"),
 }
 
 export interface AssistantMessage {

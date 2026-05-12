@@ -2,26 +2,43 @@
 
 import { useState, useRef } from "react"
 import Link from "next/link"
-import { Search, Plus, Check, ExternalLink } from "lucide-react"
+import { Search, Plus, Check, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import type { Course } from "@/lib/constants/course-data"
+import { type Course, isMajorCourse } from "@/lib/constants/course-data"
 
 interface BrowseCoursesProps {
-  courses: Course[]
+  majorCourses: Course[]
+  liberalCourses: Course[]
   wishlistIds: Set<string>
   onAdd: (id: string) => void
-  isLoadingAll?: boolean
+  /** 교양 데이터가 아직 안 받아졌으면 부모가 fetch 하도록 알림 */
+  onLiberalRequested?: () => void
+  /** 현재 로딩 중인 division — UX 표시용 */
+  loadingDivision?: "major" | "liberal" | null
 }
 
-export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = false }: BrowseCoursesProps) {
+type Division = "major" | "liberal"
+
+export function BrowseCourses({
+  majorCourses,
+  liberalCourses,
+  wishlistIds,
+  onAdd,
+  onLiberalRequested,
+  loadingDivision,
+}: BrowseCoursesProps) {
   const [query, setQuery] = useState("")
   const [confirmedQuery, setConfirmedQuery] = useState("")
+  const [division, setDivision] = useState<Division>("major")
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 10
   const tableRef = useRef<HTMLDivElement>(null)
 
-  const filtered = courses.filter((c) => {
+  const sourceCourses = division === "major" ? majorCourses : liberalCourses
+  const isLoadingThis = loadingDivision === division && sourceCourses.length === 0
+
+  const filtered = sourceCourses.filter((c) => {
     const q = confirmedQuery.toLowerCase()
     if (!q) return true
     return (
@@ -30,6 +47,13 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
       c.professor.toLowerCase().includes(q)
     )
   })
+
+  const changeDivision = (d: Division) => {
+    setDivision(d)
+    setPage(1)
+    tableRef.current?.scrollTo({ top: 0 })
+    if (d === "liberal") onLiberalRequested?.()
+  }
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -46,11 +70,30 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
         <div>
           <h2 className="text-base font-semibold text-foreground">26학년도 1학기 과목검색</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {filtered.length}개 / {courses.length}개 과목
-            {isLoadingAll && <span className="ml-1.5 text-muted-foreground/50">전체 로딩 중...</span>}
+            {filtered.length}개 / {sourceCourses.length}개 과목
+            {isLoadingThis && <span className="ml-1.5 text-muted-foreground/50">로딩 중...</span>}
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto items-center">
+          <div className="inline-flex rounded-md border border-border overflow-hidden flex-shrink-0">
+            {([
+              { value: "major", label: "전공" },
+              { value: "liberal", label: "교양" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => changeDivision(opt.value)}
+                className={`px-3 h-8 text-xs font-medium transition-colors ${
+                  division === opt.value
+                    ? "text-white"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+                style={division === opt.value ? { backgroundColor: "#B0232A" } : {}}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <div className="relative flex-1 sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -169,40 +212,73 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="mt-3 flex items-center justify-center gap-1">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 px-2 text-xs"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-          >
-            이전
-          </Button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+      {totalPages > 1 && (() => {
+        const WINDOW = 10
+        const windowStart = Math.floor((page - 1) / WINDOW) * WINDOW + 1
+        const windowEnd = Math.min(windowStart + WINDOW - 1, totalPages)
+        const pageNums = Array.from(
+          { length: windowEnd - windowStart + 1 },
+          (_, i) => windowStart + i,
+        )
+        const prevWindowPage = windowStart - 1
+        const nextWindowPage = windowEnd + 1
+        return (
+          <div className="mt-3 flex items-center justify-center gap-1">
             <Button
-              key={p}
               size="sm"
-              variant={p === page ? "default" : "outline"}
-              className="h-7 w-7 p-0 text-xs"
-              style={p === page ? { backgroundColor: "#B0232A" } : {}}
-              onClick={() => setPage(p)}
+              variant="outline"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+              aria-label="첫 페이지"
             >
-              {p}
+              <ChevronsLeft className="h-3.5 w-3.5" />
             </Button>
-          ))}
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 px-2 text-xs"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-          >
-            다음
-          </Button>
-        </div>
-      )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage(prevWindowPage)}
+              disabled={windowStart === 1}
+              aria-label="이전 묶음"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            {pageNums.map((p) => (
+              <Button
+                key={p}
+                size="sm"
+                variant={p === page ? "default" : "outline"}
+                className="h-7 w-7 p-0 text-xs"
+                style={p === page ? { backgroundColor: "#B0232A" } : {}}
+                onClick={() => setPage(p)}
+              >
+                {p}
+              </Button>
+            ))}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage(nextWindowPage)}
+              disabled={windowEnd === totalPages}
+              aria-label="다음 묶음"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 w-7 p-0"
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              aria-label="마지막 페이지"
+            >
+              <ChevronsRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )
+      })()}
     </section>
   )
 }

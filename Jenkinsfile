@@ -102,11 +102,11 @@ pipeline {
             }
         }
 
-        // ── 4. 보안 스캔 (dev 전용) ──────────────────────────────────
-        stage('Security Scan') {
+        // ── 4. SCA + Secret + IaC 스캔 (Trivy, dev 전용) ─────────────
+        stage('Security Scan - Trivy (SCA/Secret/IaC)') {
             when { expression { return env.BRANCH_SHORT == 'dev' } }
             steps {
-                script { currentBuild.description = 'Security Scan' }
+                script { currentBuild.description = 'Trivy fs' }
                 sh '''
                     mkdir -p security-reports
 
@@ -123,7 +123,40 @@ pipeline {
             }
         }
 
-        // ── 4-2. DefectDojo로 결과 업로드 (dev 전용) ────────────────
+        // ── 4-1. SAST 스캔 (Snyk Code, dev 전용) ─────────────────────
+        // Snyk Code 는 정적 코드 분석(SAST) — Trivy 의존성 스캔이 못 보는
+        // "코드 자체의 취약점 패턴"(SQLi 후보, 위험한 eval/exec, 하드코딩 비밀 등)을 찾는다.
+        // 결과는 SARIF 로 출력해 DefectDojo "SARIF" importer 로 업로드.
+        stage('Security Scan - Snyk Code (SAST)') {
+            when { expression { return env.BRANCH_SHORT == 'dev' } }
+            environment {
+                SNYK_TOKEN = credentials('snyk-token')
+            }
+            steps {
+                script { currentBuild.description = 'Snyk Code SAST' }
+                sh '''
+                    mkdir -p security-reports
+
+                    # snyk/snyk:linux 이미지에 snyk CLI 포함.
+                    # snyk code test 는 finding 발견 시 exit 1 — || true 로 빌드 계속.
+                    docker run --rm \
+                        -e SNYK_TOKEN="${SNYK_TOKEN}" \
+                        -v "$(pwd):/project" \
+                        -w /project \
+                        snyk/snyk:linux \
+                        snyk code test \
+                          --sarif-file-output=security-reports/snyk-code.sarif \
+                          --severity-threshold=high \
+                        || true
+
+                    ls -la security-reports/
+                '''
+            }
+        }
+
+        // ── 4-2. DefectDojo로 모든 스캔 결과 업로드 (dev 전용) ──────
+        // Trivy + Snyk Code 결과를 같은 engagement 에 통합 등록.
+        // close_old_findings=true 로 새 스캔에 없는 옛 finding 자동 mitigated.
         stage('Upload to Defect Dojo') {
             when { expression { return env.BRANCH_SHORT == 'dev' } }
             environment {
@@ -133,6 +166,7 @@ pipeline {
             }
             steps {
                 sh '''
+                    # ─ Trivy (SCA + Secret + IaC) ─
                     if [ -s "security-reports/trivy-fs.json" ]; then
                         curl -sf -X POST "${DD_URL}/api/v2/import-scan/" \
                             -H "Authorization: Token ${DD_TOKEN}" \
@@ -141,11 +175,29 @@ pipeline {
                             -F "file=@security-reports/trivy-fs.json" \
                             -F "active=true" \
                             -F "verified=false" \
+                            -F "close_old_findings=true" \
                             -F "branch_tag=${BRANCH_SHORT}" \
                             -F "build_id=${BUILD_NUMBER}" \
                             > /dev/null && echo "Uploaded: trivy-fs.json"
                     else
                         echo "No trivy-fs.json to upload"
+                    fi
+
+                    # ─ Snyk Code (SAST, SARIF) ─
+                    if [ -s "security-reports/snyk-code.sarif" ]; then
+                        curl -sf -X POST "${DD_URL}/api/v2/import-scan/" \
+                            -H "Authorization: Token ${DD_TOKEN}" \
+                            -F "scan_type=SARIF" \
+                            -F "engagement=${DD_ENGAGEMENT}" \
+                            -F "file=@security-reports/snyk-code.sarif" \
+                            -F "active=true" \
+                            -F "verified=false" \
+                            -F "close_old_findings=true" \
+                            -F "branch_tag=${BRANCH_SHORT}" \
+                            -F "build_id=${BUILD_NUMBER}" \
+                            > /dev/null && echo "Uploaded: snyk-code.sarif"
+                    else
+                        echo "No snyk-code.sarif to upload"
                     fi
                 '''
             }
@@ -161,25 +213,65 @@ pipeline {
         }
 
         // ── 6. Docker 빌드 & 배포 (main 전용) ───────────────────────
+        //
+        // 시크릿 관리 정책:
+        //   - 변하지 않는 설정 (DB 호스트, 포트, 도메인 등): 서버 .env에 사람이 한 번 작성
+        //   - 자주 회전하거나 민감한 키 (API 키, 패스워드): Jenkins Credentials → 배포 시 .env에 주입
+        //
+        // 시크릿 추가 방법:
+        //   1. Jenkins → Credentials → 새 Secret text 등록 (ID: kebab-case)
+        //   2. 아래 environment 블록에 한 줄 추가
+        //   3. steps의 update_env 호출에 한 줄 추가
         stage('Deploy') {
             when { expression { return env.BRANCH_SHORT == 'main' } }
             environment {
-                // Jenkins Credentials(Secret text)에서 API 키 주입.
-                // admin 챗 UI / 포트폴리오 AI 평가에서 사용.
-                GEMINI_API_KEY = credentials('gemini-api-key')
-                // ocr-service의 시간표/강의계획서 OCR에서 사용.
-                MISTRAL_API_KEY = credentials('mistral-api-key')
+                // ── 자주 회전하는 시크릿 ──
+                GEMINI_API_KEY  = credentials('gemini-api-key')       // 포트폴리오 평가 + admin 챗봇
+                MISTRAL_API_KEY = credentials('mistral-api-key')      // OCR 마이크로서비스
+                // 새 시크릿은 여기에 한 줄 추가하면 됨
+                // EXAMPLE_KEY  = credentials('example-key')
             }
             steps {
                 script { currentBuild.description = 'Deploy' }
                 sh '''
+                    # 시크릿이 set -x로 로그에 노출되지 않도록 비활성화
                     set +x
-                    # .env 파일에 API 키들 갱신 (기존 라인 제거 후 새로 추가)
-                    touch .env
-                    sed -i '/^GEMINI_API_KEY=/d' .env
-                    echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .env
-                    sed -i '/^MISTRAL_API_KEY=/d' .env
-                    echo "MISTRAL_API_KEY=${MISTRAL_API_KEY}" >> .env
+
+                    # ── .env 구성 전략 ──
+                    # 1) 영구 base .env를 workspace로 복사 (DB, 도메인 등 안 변하는 값)
+                    # 2) Jenkins Credentials의 시크릿을 덮어씌움 (API 키 등 자주 회전)
+                    #
+                    # base .env 추가/수정은 사람이 SSH로 직접:
+                    #   sudo nano /var/lib/jenkins/seoganpyo-prod.env
+                    BASE_ENV="/var/lib/jenkins/seoganpyo-prod.env"
+                    if [ -f "$BASE_ENV" ]; then
+                        cp "$BASE_ENV" .env
+                        echo "Base .env 복사 완료 ($(wc -l < .env)줄)"
+                    else
+                        echo "⚠️ Base .env 없음 ($BASE_ENV) — 빈 .env로 진행"
+                        echo "⚠️ 다음 명령어로 영구 .env를 만드세요:"
+                        echo "  sudo cp .env $BASE_ENV"
+                        echo "  sudo chown jenkins:jenkins $BASE_ENV"
+                        echo "  sudo chmod 600 $BASE_ENV"
+                        touch .env
+                    fi
+
+                    # .env의 특정 키를 안전하게 갱신하는 헬퍼
+                    # - 기존 라인 제거 후 새 값 추가
+                    # - printf 사용으로 특수문자 안전
+                    update_env() {
+                        local key="$1"
+                        local value="$2"
+                        sed -i "/^${key}=/d" .env 2>/dev/null || true
+                        printf '%s=%s\\n' "${key}" "${value}" >> .env
+                    }
+
+                    # ── Jenkins Credentials → .env 주입 ──
+                    update_env "GEMINI_API_KEY"  "${GEMINI_API_KEY}"
+                    update_env "MISTRAL_API_KEY" "${MISTRAL_API_KEY}"
+                    # 새 시크릿은 여기에 한 줄 추가하면 됨
+                    # update_env "EXAMPLE_KEY"   "${EXAMPLE_KEY}"
+
                     set -x
 
                     docker compose stop backend frontend ocr-service redis || true
