@@ -325,13 +325,17 @@ export default function GraduationPage() {
                   총 이수 학점
                 </span>
               </div>
-              <p className="text-3xl font-bold text-foreground">
-                {totalCredits}{" "}
-                <span className="text-sm font-normal text-muted-foreground">학점</span>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                전공 {majorCredits} · 교양 {liberalCredits}
-              </p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <p className="text-3xl font-bold text-foreground">
+                  {totalCredits}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">학점</span>
+                </p>
+                <p className="text-base text-muted-foreground">
+                  전공 <span className="font-semibold text-foreground">{majorCredits}</span>
+                  <span className="mx-1.5">·</span>
+                  교양 <span className="font-semibold text-foreground">{liberalCredits}</span>
+                </p>
+              </div>
             </div>
             <div className="rounded-lg border border-border bg-card p-5">
               <div className="flex items-center gap-2 mb-2">
@@ -340,13 +344,17 @@ export default function GraduationPage() {
                   이수 과목 수
                 </span>
               </div>
-              <p className="text-3xl font-bold text-foreground">
-                {dedupedHistories.length}{" "}
-                <span className="text-sm font-normal text-muted-foreground">과목</span>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                전공 {majorCount} · 교양 {liberalCount}
-              </p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <p className="text-3xl font-bold text-foreground">
+                  {dedupedHistories.length}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">과목</span>
+                </p>
+                <p className="text-base text-muted-foreground">
+                  전공 <span className="font-semibold text-foreground">{majorCount}</span>
+                  <span className="mx-1.5">·</span>
+                  교양 <span className="font-semibold text-foreground">{liberalCount}</span>
+                </p>
+              </div>
             </div>
           </div>
 
