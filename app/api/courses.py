@@ -16,6 +16,11 @@ def get_courses(
     year: Optional[int] = Query(None),
     semester: Optional[int] = Query(None),
     category: Optional[str] = Query(None, description="course_category 필터"),
+    division: Optional[str] = Query(
+        None,
+        regex="^(major|liberal)$",
+        description="major=CSE 전공, liberal=교양 (course_code prefix 기준)",
+    ),
     is_english: Optional[bool] = Query(None),
     limit: Optional[int] = Query(None),
     offset: int = Query(0),
@@ -33,6 +38,10 @@ def get_courses(
         query = query.filter(Course.semester == semester)
     if category:
         query = query.filter(Course.course_category == category)
+    if division == "major":
+        query = query.filter(Course.course_code.like("CSE%"))
+    elif division == "liberal":
+        query = query.filter(~Course.course_code.like("CSE%"))
     if is_english is not None:
         query = query.filter(Course.is_english == is_english)
     query = query.offset(offset)

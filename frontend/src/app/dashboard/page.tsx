@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles } from "lucide-react"
@@ -37,13 +37,17 @@ function mapApiCourse(c: ApiCourse): Course {
   }
 }
 
+const TARGET_YEAR = 2026
+const TARGET_SEMESTER = 1
+
 export default function DashboardPage() {
   const router = useRouter()
-  const [courses, setCourses] = useState<Course[]>([])
+  const [majorCourses, setMajorCourses] = useState<Course[]>([])
+  const [liberalCourses, setLiberalCourses] = useState<Course[]>([])
+  const [loadingDivision, setLoadingDivision] = useState<"major" | "liberal" | null>("major")
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [userName, setUserName] = useState<string>("")
   const [histories, setHistories] = useState<HistoryItem[]>([])
-  const [isLoadingAll, setIsLoadingAll] = useState(false)
   const [userInterests, setUserInterests] = useState<string[]>([])
 
   useEffect(() => {
@@ -53,17 +57,20 @@ export default function DashboardPage() {
       return
     }
 
-    // 첫 페이지(10개) 즉시 표시
-    coursesApi.list({ year: 2026, semester: 1, limit: 10 })
-      .then((data) => setCourses(data.map(mapApiCourse)))
+    // 진입 시 전공만 먼저 로드 (페이로드 작음, 검색 첫 화면이 전공 기본)
+    coursesApi.list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division: "major" })
+      .then((data) => setMajorCourses(data.map(mapApiCourse)))
       .catch(() => {})
-
-    // 전체 목록 백그라운드 로딩
-    setIsLoadingAll(true)
-    coursesApi.list({ year: 2026, semester: 1 })
-      .then((data) => setCourses(data.map(mapApiCourse)))
-      .catch(() => {})
-      .finally(() => setIsLoadingAll(false))
+      .finally(() => {
+        // 전공 화면 표시 직후 백그라운드로 교양도 미리 받아둔다.
+        // loadingDivision 을 "liberal" 로 유지해 두면 사용자가 prefetch 중에 교양 토글을 눌러도
+        // fetchLiberalIfNeeded 의 중복 호출 가드가 작동한다.
+        setLoadingDivision("liberal")
+        coursesApi.list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division: "liberal" })
+          .then((data) => setLiberalCourses(data.map(mapApiCourse)))
+          .catch(() => {})
+          .finally(() => setLoadingDivision(null))
+      })
 
     usersApi.me()
       .then((u) => {
@@ -80,24 +87,45 @@ export default function DashboardPage() {
       .catch(() => {})
   }, [router])
 
-  const wishlistIds = new Set(
-    cartItems.map((item) => String(item.course_id))
+  // 교양은 토글 클릭 시 lazy fetch (1회만)
+  const fetchLiberalIfNeeded = useCallback(() => {
+    if (liberalCourses.length > 0 || loadingDivision === "liberal") return
+    setLoadingDivision("liberal")
+    coursesApi.list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division: "liberal" })
+      .then((data) => setLiberalCourses(data.map(mapApiCourse)))
+      .catch(() => {})
+      .finally(() => setLoadingDivision(null))
+  }, [liberalCourses.length, loadingDivision])
+
+  const wishlistIds = useMemo(
+    () => new Set(cartItems.map((item) => String(item.course_id))),
+    [cartItems],
   )
   // cartId 역조회용 맵 (course_id → cartItemId)
-  const cartIdMap = new Map(
-    cartItems.map((item) => [String(item.course_id), item.id])
+  const cartIdMap = useMemo(
+    () => new Map(cartItems.map((item) => [String(item.course_id), item.id])),
+    [cartItems],
   )
 
-  // 카드 표시용 (기존 정렬 유지)
-  const wishlistedCourses = courses.filter((c) => wishlistIds.has(c.id))
+  // 관심 과목/시간표는 cart 응답의 course 객체를 그대로 사용 — division fetch 완료에 의존하지 않음.
+  const wishlistedCourses = useMemo<Course[]>(
+    () =>
+      cartItems
+        .filter((item) => item.course)
+        .map((item) => mapApiCourse(item.course!)),
+    [cartItems],
+  )
 
-  // 시간표용: cart 추가 순서(id 오름차순)대로 정렬해서 같은 시간대면 최근 추가가 위로 렌더되도록.
-  const courseById = new Map(courses.map((c) => [c.id, c]))
-  const timetableCourses = cartItems
-    .slice()
-    .sort((a, b) => a.id - b.id)
-    .map((item) => courseById.get(String(item.course_id)))
-    .filter((c): c is Course => !!c)
+  // 시간표용: cart 추가 순서(id 오름차순) — 같은 시간대면 최근 추가가 위로 렌더되도록.
+  const timetableCourses = useMemo<Course[]>(
+    () =>
+      cartItems
+        .slice()
+        .sort((a, b) => a.id - b.id)
+        .filter((item) => item.course)
+        .map((item) => mapApiCourse(item.course!)),
+    [cartItems],
+  )
 
   const addToWishlist = async (id: string) => {
     const token = localStorage.getItem("access_token")
@@ -348,10 +376,12 @@ export default function DashboardPage() {
 
           {/* Browse Section */}
           <BrowseCourses
-            courses={courses}
+            majorCourses={majorCourses}
+            liberalCourses={liberalCourses}
             wishlistIds={wishlistIds}
             onAdd={addToWishlist}
-            isLoadingAll={isLoadingAll}
+            onLiberalRequested={fetchLiberalIfNeeded}
+            loadingDivision={loadingDivision}
           />
         </div>
       </main>
