@@ -26,3 +26,5 @@ class Cart(Base):
     course_id = Column(Integer, ForeignKey("courses.course_id"))
 
     user = relationship("User", back_populates="carts")
+    # CartResponse 가 course 를 포함하므로 ORM 관계 명시 — API 핸들러에서 joinedload 로 fetch.
+    course = relationship("Course")

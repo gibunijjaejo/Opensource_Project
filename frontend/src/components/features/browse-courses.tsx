@@ -8,15 +8,26 @@ import { Button } from "@/components/ui/button"
 import { type Course, isMajorCourse } from "@/lib/constants/course-data"
 
 interface BrowseCoursesProps {
-  courses: Course[]
+  majorCourses: Course[]
+  liberalCourses: Course[]
   wishlistIds: Set<string>
   onAdd: (id: string) => void
-  isLoadingAll?: boolean
+  /** 교양 데이터가 아직 안 받아졌으면 부모가 fetch 하도록 알림 */
+  onLiberalRequested?: () => void
+  /** 현재 로딩 중인 division — UX 표시용 */
+  loadingDivision?: "major" | "liberal" | null
 }
 
 type Division = "major" | "liberal"
 
-export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = false }: BrowseCoursesProps) {
+export function BrowseCourses({
+  majorCourses,
+  liberalCourses,
+  wishlistIds,
+  onAdd,
+  onLiberalRequested,
+  loadingDivision,
+}: BrowseCoursesProps) {
   const [query, setQuery] = useState("")
   const [confirmedQuery, setConfirmedQuery] = useState("")
   const [division, setDivision] = useState<Division>("major")
@@ -24,10 +35,10 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
   const PAGE_SIZE = 10
   const tableRef = useRef<HTMLDivElement>(null)
 
-  const filtered = courses.filter((c) => {
-    const isMajor = isMajorCourse(c.code)
-    if (division === "major" && !isMajor) return false
-    if (division === "liberal" && isMajor) return false
+  const sourceCourses = division === "major" ? majorCourses : liberalCourses
+  const isLoadingThis = loadingDivision === division && sourceCourses.length === 0
+
+  const filtered = sourceCourses.filter((c) => {
     const q = confirmedQuery.toLowerCase()
     if (!q) return true
     return (
@@ -41,6 +52,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
     setDivision(d)
     setPage(1)
     tableRef.current?.scrollTo({ top: 0 })
+    if (d === "liberal") onLiberalRequested?.()
   }
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
@@ -58,8 +70,8 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
         <div>
           <h2 className="text-base font-semibold text-foreground">26학년도 1학기 과목검색</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {filtered.length}개 / {courses.length}개 과목
-            {isLoadingAll && <span className="ml-1.5 text-muted-foreground/50">전체 로딩 중...</span>}
+            {filtered.length}개 / {sourceCourses.length}개 과목
+            {isLoadingThis && <span className="ml-1.5 text-muted-foreground/50">로딩 중...</span>}
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto items-center">
