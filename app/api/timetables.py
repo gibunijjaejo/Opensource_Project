@@ -21,7 +21,6 @@ from app.dependencies import get_current_student_id
 from app.models.activity import Timetable, TimetableCourse
 from app.models.course import Course
 from app.schemas.timetable import (
-    SlotLiteral,
     TimetableCourseCreate,
     TimetableResponse,
     TimetableUpdate,
