@@ -40,8 +40,10 @@
 ### AI / 외부 서비스
 | 기술 | 용도 |
 |------|------|
+| Mistral API (pixtral-12b-2409) | 시간표 이미지 OCR (`ocr-service/`) |
+| Ollama (exaone3.5:7.8b, 호스트 로컬) | 교수 연구분야 한국어 AI 요약 |
 | Groq API (llama-3.3-70b) | 강의계획서 PDF 분석 및 구조화 |
-| Ollama (qwen3.5:4b) | 교수 연구분야 한국어 AI 요약 |
+| Gemini API (gemini-2.5-flash) | 관리자 챗 / 보안 분석 |
 | Gmail SMTP | 이메일 인증번호 발송 |
 
 ### 인프라 / DevOps
@@ -67,7 +69,7 @@
 [ FastAPI Backend   :8080 ]
         ├── PostgreSQL            ← 운영 DB
         ├── Redis         :6379   ← OTP 임시 저장
-        └── OCR Service   :8001   ← PaddleOCR 마이크로서비스
+        └── OCR Service   :8001   ← Mistral Pixtral OCR 호출 마이크로서비스
 ```
 
 ### Docker 컨테이너 구성
@@ -77,7 +79,7 @@ docker compose
 ├── seoganpyo-frontend    (Next.js,    3000:3000)
 ├── seoganpyo-api         (FastAPI,    8080:8000)
 ├── seoganpyo-redis       (Redis,      6379:6379)
-└── seoganpyo-ocr         (PaddleOCR,  8001:8000)
+└── seoganpyo-ocr         (Mistral OCR, 8001:8000)
 ```
 
 ### 백엔드 레이어 구조
@@ -104,7 +106,7 @@ app/
     ├── user_service.py      → 비밀번호 해싱, JWT 발급
     ├── crawl_service.py     → 교수 정보 크롤링 + Ollama 요약
     ├── syllabus_service.py  → PDF 텍스트 추출 + Groq AI 분석
-    ├── image_service.py     → PaddleOCR 시간표 이미지 처리
+    ├── image_service.py     → 시간표 OCR 결과 후처리 + 과목 fuzzy 매칭
     ├── history_service.py   → 수강이력 저장/조회
     └── email_service.py     → SMTP 이메일 발송
 ```
