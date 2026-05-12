@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
@@ -11,7 +12,7 @@ import type { Course } from "@/lib/constants/course-data"
 import { coursesApi, cartApi, usersApi, historyApi } from "@/lib/api"
 import { getCurrentSemester } from "@/lib/utils"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
-import type { Course as ApiCourse, CartItem, HistoryItem } from "@/types"
+import type { Course as ApiCourse, CartItem } from "@/types"
 
 // API 응답 → 컴포넌트가 기대하는 Course 타입으로 변환
 function mapApiCourse(c: ApiCourse): Course {
@@ -40,74 +41,95 @@ function mapApiCourse(c: ApiCourse): Course {
 const TARGET_YEAR = 2026
 const TARGET_SEMESTER = 1
 
+// Query key factory — 다른 페이지에서도 동일 키로 캐시 공유 가능.
+const QK = {
+  courses: (year: number, semester: number, division: "major" | "liberal") =>
+    ["courses", { year, semester, division }] as const,
+  cart: ["cart"] as const,
+  me: ["users", "me"] as const,
+  myHistories: ["histories", "me"] as const,
+}
+
+const fetchCourses = (division: "major" | "liberal") =>
+  coursesApi
+    .list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division })
+    .then((data) => data.map(mapApiCourse))
+
 export default function DashboardPage() {
   const router = useRouter()
-  const [majorCourses, setMajorCourses] = useState<Course[]>([])
-  const [liberalCourses, setLiberalCourses] = useState<Course[]>([])
-  const [loadingDivision, setLoadingDivision] = useState<"major" | "liberal" | null>("major")
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
-  const [userName, setUserName] = useState<string>("")
-  const [histories, setHistories] = useState<HistoryItem[]>([])
-  const [userInterests, setUserInterests] = useState<string[]>([])
+  const queryClient = useQueryClient()
+  const [liberalRequested, setLiberalRequested] = useState(false)
 
+  // 인증 가드 — 토큰 없으면 로그인 페이지로
   useEffect(() => {
     const token = localStorage.getItem("access_token")
-    if (!token) {
-      router.replace("/login")
-      return
-    }
-
-    // 진입 시 전공만 먼저 로드 (페이로드 작음, 검색 첫 화면이 전공 기본)
-    coursesApi.list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division: "major" })
-      .then((data) => setMajorCourses(data.map(mapApiCourse)))
-      .catch(() => {})
-      .finally(() => {
-        // 전공 화면 표시 직후 백그라운드로 교양도 미리 받아둔다.
-        // loadingDivision 을 "liberal" 로 유지해 두면 사용자가 prefetch 중에 교양 토글을 눌러도
-        // fetchLiberalIfNeeded 의 중복 호출 가드가 작동한다.
-        setLoadingDivision("liberal")
-        coursesApi.list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division: "liberal" })
-          .then((data) => setLiberalCourses(data.map(mapApiCourse)))
-          .catch(() => {})
-          .finally(() => setLoadingDivision(null))
-      })
-
-    usersApi.me()
-      .then((u) => {
-        setUserName(u.name)
-        const interests = u.interests ? u.interests.split(",").filter(Boolean) : []
-        setUserInterests(interests)
-      })
-      .catch(() => {})
-    cartApi.get()
-      .then(setCartItems)
-      .catch(() => {})
-    historyApi.getMyHistories()
-      .then(setHistories)
-      .catch(() => {})
+    if (!token) router.replace("/login")
   }, [router])
 
-  // 교양은 토글 클릭 시 lazy fetch (1회만)
+  // React Query 가 mount/unmount 무관하게 캐시를 유지하므로 페이지 이동 후 돌아와도 즉시 hit.
+  const majorQuery = useQuery({
+    queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "major"),
+    queryFn: () => fetchCourses("major"),
+  })
+  const liberalQuery = useQuery({
+    queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "liberal"),
+    queryFn: () => fetchCourses("liberal"),
+    // 사용자가 교양 토글을 누른 적이 있을 때만 활성화. prefetch 가 미리 캐시를 채워놓으므로 hit.
+    enabled: liberalRequested,
+  })
+  const meQuery = useQuery({ queryKey: QK.me, queryFn: () => usersApi.me() })
+  const cartQuery = useQuery({ queryKey: QK.cart, queryFn: () => cartApi.get() })
+  const historiesQuery = useQuery({
+    queryKey: QK.myHistories,
+    queryFn: () => historyApi.getMyHistories(),
+  })
+
+  // 전공 fetch 끝나면 교양도 백그라운드 prefetch (캐시에 채워두기)
+  useEffect(() => {
+    if (majorQuery.isSuccess) {
+      queryClient.prefetchQuery({
+        queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "liberal"),
+        queryFn: () => fetchCourses("liberal"),
+      })
+    }
+  }, [majorQuery.isSuccess, queryClient])
+
+  const majorCourses = majorQuery.data ?? []
+  const liberalCourses = liberalQuery.data ?? []
+  const loadingDivision: "major" | "liberal" | null = majorQuery.isPending
+    ? "major"
+    : liberalCourses.length === 0 &&
+      (liberalQuery.isFetching ||
+        queryClient.isFetching({
+          queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "liberal"),
+        }) > 0)
+    ? "liberal"
+    : null
+
   const fetchLiberalIfNeeded = useCallback(() => {
-    if (liberalCourses.length > 0 || loadingDivision === "liberal") return
-    setLoadingDivision("liberal")
-    coursesApi.list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division: "liberal" })
-      .then((data) => setLiberalCourses(data.map(mapApiCourse)))
-      .catch(() => {})
-      .finally(() => setLoadingDivision(null))
-  }, [liberalCourses.length, loadingDivision])
+    setLiberalRequested(true)
+  }, [])
+
+  const userName = meQuery.data?.name ?? ""
+  const userInterests = useMemo(
+    () =>
+      meQuery.data?.interests
+        ? meQuery.data.interests.split(",").filter(Boolean)
+        : [],
+    [meQuery.data?.interests],
+  )
+  const cartItems = cartQuery.data ?? []
+  const histories = historiesQuery.data ?? []
 
   const wishlistIds = useMemo(
     () => new Set(cartItems.map((item) => String(item.course_id))),
     [cartItems],
   )
-  // cartId 역조회용 맵 (course_id → cartItemId)
   const cartIdMap = useMemo(
     () => new Map(cartItems.map((item) => [String(item.course_id), item.id])),
     [cartItems],
   )
 
-  // 관심 과목/시간표는 cart 응답의 course 객체를 그대로 사용 — division fetch 완료에 의존하지 않음.
   const wishlistedCourses = useMemo<Course[]>(
     () =>
       cartItems
@@ -115,8 +137,6 @@ export default function DashboardPage() {
         .map((item) => mapApiCourse(item.course!)),
     [cartItems],
   )
-
-  // 시간표용: cart 추가 순서(id 오름차순) — 같은 시간대면 최근 추가가 위로 렌더되도록.
   const timetableCourses = useMemo<Course[]>(
     () =>
       cartItems
@@ -128,11 +148,12 @@ export default function DashboardPage() {
   )
 
   const addToWishlist = async (id: string) => {
-    const token = localStorage.getItem("access_token")
-    if (!token) return
+    if (!localStorage.getItem("access_token")) return
     try {
       const newItem = await cartApi.add(Number(id))
-      setCartItems((prev) => [...prev, newItem])
+      queryClient.setQueryData<CartItem[]>(QK.cart, (prev) =>
+        prev ? [...prev, newItem] : [newItem],
+      )
     } catch {/* 이미 추가됨 등 */}
   }
 
@@ -141,13 +162,17 @@ export default function DashboardPage() {
     if (cartId == null) return
     try {
       await cartApi.remove(cartId)
-      setCartItems((prev) => prev.filter((item) => item.id !== cartId))
+      queryClient.setQueryData<CartItem[]>(QK.cart, (prev) =>
+        prev?.filter((item) => item.id !== cartId) ?? [],
+      )
     } catch {}
   }
 
   const handleLogout = () => {
     localStorage.removeItem("access_token")
     document.cookie = "access_token=; path=/; max-age=0"
+    // 캐시 비움 — 다른 사용자가 로그인했을 때 이전 사용자 데이터 누수 방지
+    queryClient.clear()
     router.replace("/login")
   }
 
