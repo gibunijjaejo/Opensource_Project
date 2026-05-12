@@ -103,10 +103,19 @@ export const authApi = {
 
 // ── Courses ───────────────────────────────────────────
 export const coursesApi = {
-  list: (params?: { q?: string; category?: string; year?: number; semester?: number; limit?: number; offset?: number }) => {
+  list: (params?: {
+    q?: string
+    category?: string
+    division?: "major" | "liberal"
+    year?: number
+    semester?: number
+    limit?: number
+    offset?: number
+  }) => {
     const qs = new URLSearchParams()
     if (params?.q) qs.set("q", params.q)
     if (params?.category) qs.set("category", params.category)
+    if (params?.division) qs.set("division", params.division)
     if (params?.year) qs.set("year", String(params.year))
     if (params?.semester) qs.set("semester", String(params.semester))
     if (params?.limit) qs.set("limit", String(params.limit))

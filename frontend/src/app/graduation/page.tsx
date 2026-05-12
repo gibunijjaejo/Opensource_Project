@@ -216,13 +216,31 @@ export default function GraduationPage() {
 
   // ── 그룹핑 ────────────────────────────────────────────
   const creditOf = (h: HistoryItem) => h.course?.credits ?? 3
-  const majorCredits = histories
+
+  // 재수강은 학점 합산에 추가하지 않는다. 같은 course_code 그룹에서 시간순 가장 최근 row
+  // 한 개만 학점·과목 수에 반영 — 재수강이 들어오면 이전 row 의 학점을 빼고 새 row 의
+  // 학점을 더한 효과 (학점이 동일하면 결과 그대로, 학점이 바뀌었으면 최신 학점 사용).
+  const latestByCode = new Map<string, HistoryItem>()
+  for (const h of histories) {
+    const prev = latestByCode.get(h.course_code)
+    if (
+      !prev ||
+      chronoKey(h.year, h.semester) > chronoKey(prev.year, prev.semester)
+    ) {
+      latestByCode.set(h.course_code, h)
+    }
+  }
+  const dedupedHistories = Array.from(latestByCode.values())
+
+  const majorCredits = dedupedHistories
     .filter((h) => isMajorCourse(h.course_code))
     .reduce((sum, h) => sum + creditOf(h), 0)
-  const liberalCredits = histories
+  const liberalCredits = dedupedHistories
     .filter((h) => !isMajorCourse(h.course_code))
     .reduce((sum, h) => sum + creditOf(h), 0)
   const totalCredits = majorCredits + liberalCredits
+  const majorCount = dedupedHistories.filter((h) => isMajorCourse(h.course_code)).length
+  const liberalCount = dedupedHistories.length - majorCount
 
   const groupMap = histories.reduce((acc: Record<string, SemesterGroup>, h: HistoryItem) => {
     const key = `${h.year ?? "null"}-${h.semester ?? "null"}`
@@ -307,13 +325,17 @@ export default function GraduationPage() {
                   총 이수 학점
                 </span>
               </div>
-              <p className="text-3xl font-bold text-foreground">
-                {totalCredits}{" "}
-                <span className="text-sm font-normal text-muted-foreground">학점</span>
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                전공 {majorCredits} · 교양 {liberalCredits}
-              </p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <p className="text-3xl font-bold text-foreground">
+                  {totalCredits}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">학점</span>
+                </p>
+                <p className="text-base text-muted-foreground">
+                  전공 <span className="font-semibold text-foreground">{majorCredits}</span>
+                  <span className="mx-1.5">·</span>
+                  교양 <span className="font-semibold text-foreground">{liberalCredits}</span>
+                </p>
+              </div>
             </div>
             <div className="rounded-lg border border-border bg-card p-5">
               <div className="flex items-center gap-2 mb-2">
@@ -322,10 +344,17 @@ export default function GraduationPage() {
                   이수 과목 수
                 </span>
               </div>
-              <p className="text-3xl font-bold text-foreground">
-                {histories.length}{" "}
-                <span className="text-sm font-normal text-muted-foreground">과목</span>
-              </p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <p className="text-3xl font-bold text-foreground">
+                  {dedupedHistories.length}
+                  <span className="ml-1 text-sm font-normal text-muted-foreground">과목</span>
+                </p>
+                <p className="text-base text-muted-foreground">
+                  전공 <span className="font-semibold text-foreground">{majorCount}</span>
+                  <span className="mx-1.5">·</span>
+                  교양 <span className="font-semibold text-foreground">{liberalCount}</span>
+                </p>
+              </div>
             </div>
           </div>
 

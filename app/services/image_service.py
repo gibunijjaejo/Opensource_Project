@@ -520,7 +520,14 @@ def extract_year_semester_from_blocks(
 
 
 def _score_pair(na: str, nb: str) -> float:
-    """정규화된 두 문자열 쌍의 유사도 점수를 계산합니다."""
+    """정규화된 두 문자열 쌍의 유사도 점수를 계산합니다.
+
+    핵심 규칙:
+      - 짧은 쪽이 긴 쪽의 prefix (예: "데이터구조" → "데이터구조와알고리즘") → 부분 매칭 신뢰
+      - prefix 가 아닌데 substring 으로 끼어 있으면 (예: "미적분학1" ↔ "고등미적분학1")
+        ratio·token_sort 에도 length penalty 곱해서 강하게 감점 → false positive 방지
+      - 길이 차가 크고 prefix 도 아니면 partial / token_set 자체를 사용 안 함
+    """
     len_a, len_b = len(na), len(nb)
     ratio_score = fuzz.ratio(na, nb)
     token_sort_score = fuzz.token_sort_ratio(na, nb)
@@ -529,16 +536,29 @@ def _score_pair(na: str, nb: str) -> float:
 
     min_len = min(len_a, len_b)
     max_len = max(len_a, len_b)
+    len_ratio = min_len / max_len if max_len else 1.0
 
-    if min_len >= 4 and (nb in na or na in nb) and max_len > min_len * 1.25:
-        # 한쪽이 다른 쪽에 포함된 경우 (예: "캡스톤디자인(캡스톤디자인)" ↔ "캡스톤디자인",
-        #                               OCR 부분 인식 "sw개발실습" ↔ "오픈소스를이용한sw개발실습")
+    is_prefix = bool(na) and bool(nb) and (na.startswith(nb) or nb.startswith(na))
+
+    # prefix 면제: 시작이 같으면 자연스러운 확장 (e.g. 캡스톤디자인 ↔ 캡스톤디자인(...))
+    if is_prefix:
         return float(max(ratio_score, token_sort_score, partial_score))
-    else:
-        len_ratio = min_len / max_len
-        penalized_partial = partial_score * len_ratio
-        penalized_token_set = token_set_score * len_ratio
-        return float(max(ratio_score, token_sort_score, penalized_partial, penalized_token_set))
+
+    # prefix 가 아닌데 한쪽이 다른 쪽에 substring 으로 들어있고 길이 차 큼 →
+    # "미적분학1" ↔ "고등미적분학1" 같은 의심 매칭. ratio 자체에도 length penalty.
+    if min_len >= 4 and (nb in na or na in nb) and max_len > min_len * 1.25:
+        return float(max(ratio_score * len_ratio, token_sort_score * len_ratio))
+
+    # 길이 차 크고 substring 도 아니면 partial / token_set 사용 안 함
+    if len_ratio < 0.7:
+        return float(max(ratio_score, token_sort_score))
+
+    penalized_partial = partial_score * len_ratio
+    penalized_token_set = token_set_score * len_ratio
+    return float(max(ratio_score, token_sort_score, penalized_partial, penalized_token_set))
+
+
+_TRAILING_NUM_RE = re.compile(r"(\d+)$")
 
 
 def compute_similarity(a: str, b: str) -> float:
@@ -556,6 +576,14 @@ def compute_similarity(a: str, b: str) -> float:
     cnb = _confusion_normalize(nb)
     if cna != na or cnb != nb:
         score = max(score, _score_pair(cna, cnb))
+
+    # 끝 숫자(학년/세부 과목 번호)가 둘 다 존재하는데 다르면 사실상 reject.
+    # fuzz.ratio 는 한 글자 차이를 길이 비율로만 봐서 '컴퓨터프로그래밍1' vs '컴퓨터프로그래밍2'
+    # 같은 케이스를 잘 못 거른다. 명시적 검사로 보강.
+    a_suf = _TRAILING_NUM_RE.search(na)
+    b_suf = _TRAILING_NUM_RE.search(nb)
+    if a_suf and b_suf and a_suf.group(1) != b_suf.group(1):
+        score *= 0.4  # threshold 68 기준 ratio 100 → 40 으로 떨어져 reject
 
     return score
 
@@ -623,18 +651,20 @@ def apply_cp1_to_cp2_rule(
 
 
 def _adaptive_threshold(candidate: str, base: float) -> float:
+    # 짧은 이름은 false positive 위험이 크므로 길이 보정을 먼저 적용 (영문 OCR 완화보다 우선).
+    # 예: 5자짜리 "미적문학I" 의 'I' 한 글자 때문에 영문 비율이 20% 넘는 케이스 방지.
+    norm = normalize_text(candidate)
+    if len(norm) <= 5:
+        return min(base + 8.0, 80.0)
+    if len(norm) <= 8:
+        return min(base + 3.0, 75.0)
+
+    # 8자 초과에서만 영문 OCR 완화 적용
     ratio = _english_char_ratio(candidate)
     if ratio >= 0.5:
         return max(base - 8.0, 58.0)
     if ratio >= 0.2:
         return max(base - 4.0, 62.0)
-
-    # 정규화된 길이가 짧은 과목명은 임계값 완화
-    norm = normalize_text(candidate)
-    if len(norm) <= 5:
-        return max(base - 6.0, 60.0)
-    if len(norm) <= 8:
-        return max(base - 3.0, 62.0)
 
     return base
 
@@ -663,23 +693,40 @@ def match_courses_to_db(
     matched_courses: List[Dict[str, Any]] = []
     ignored_candidates: List[Dict[str, Any]] = []
 
-    for candidate in course_names:
-        best_course: Optional[Course] = None
-        best_score = -1.0
-        second_best_score = -1.0
+    # best 와 second_best 가 너무 가까우면 매칭 불확실로 간주.
+    # 단, 같은 course_code (분반 등) 는 모호성 검사에서 제외 — 같은 강의니까.
+    # 매우 높은 점수(>=90)는 정확 매칭이라 모호성 검사 면제.
+    AMBIGUITY_MARGIN = 3.0
+    AMBIGUITY_HIGH_SCORE_BYPASS = 90.0
 
+    for candidate in course_names:
+        # course_code 별 best score 만 수집 → 분반 통합
+        score_by_code: Dict[str, Tuple[float, Course]] = {}
         for course in courses:
             score = compute_similarity(candidate, course.course_name)
+            prev = score_by_code.get(course.course_code)
+            if prev is None or score > prev[0]:
+                score_by_code[course.course_code] = (score, course)
 
-            if score > best_score:
-                second_best_score = best_score
-                best_score = score
-                best_course = course
-            elif score > second_best_score:
-                second_best_score = score
+        if not score_by_code:
+            ignored_candidates.append(
+                {"ocr_text": candidate, "best_score": 0.0, "reason": "no_courses"}
+            )
+            continue
+
+        ranked = sorted(score_by_code.values(), key=lambda x: x[0], reverse=True)
+        best_score, best_course = ranked[0]
+        second_best_score = ranked[1][0] if len(ranked) > 1 else -1.0
 
         effective_threshold = _adaptive_threshold(candidate, threshold)
-        if best_course and best_score >= effective_threshold:
+        is_ambiguous = (
+            best_score >= effective_threshold
+            and best_score < AMBIGUITY_HIGH_SCORE_BYPASS
+            and second_best_score >= 0
+            and (best_score - second_best_score) < AMBIGUITY_MARGIN
+        )
+
+        if best_course and best_score >= effective_threshold and not is_ambiguous:
             matched_courses.append(
                 {
                     "ocr_text": candidate,
@@ -697,7 +744,7 @@ def match_courses_to_db(
                     "ocr_text": candidate,
                     "best_score": round(best_score, 2) if best_score >= 0 else 0.0,
                     "second_score": round(second_best_score, 2) if second_best_score >= 0 else None,
-                    "reason": "below_threshold",
+                    "reason": "ambiguous" if is_ambiguous else "below_threshold",
                 }
             )
 
