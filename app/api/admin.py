@@ -12,7 +12,7 @@ from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Literal, Optional
 from app.database import get_db
 from app.models.user import User
 from app.models.post import Post, Comment
@@ -550,6 +550,8 @@ def crawl_professors(
 
 class SummarizeBody(BaseModel):
     prompt_override: str | None = None
+    # Professor.department 기준. "major" = 컴퓨터공학과, "liberal" = 그 외, "all" = 전체.
+    division: Literal["major", "liberal", "all"] = "all"
 
 
 @router.post("/professors/summarize-all")
@@ -584,11 +586,21 @@ def resummarize_all_stream(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    from app.models.professor import ProfessorDetail
+    from app.models.professor import Professor, ProfessorDetail
     from app.services.crawl_service import _summarize_research_area, _to_plain
 
     def generate():
-        details = db.query(ProfessorDetail).filter(ProfessorDetail.research_area.isnot(None)).all()
+        query = db.query(ProfessorDetail).filter(ProfessorDetail.research_area.isnot(None))
+        if body.division != "all":
+            target_dept = "컴퓨터공학과" if body.division == "major" else "교양"
+            major_ids = {
+                pid for (pid,) in db.query(Professor.professor_id)
+                .filter(Professor.department == target_dept)
+                .all()
+            }
+            details = [d for d in query.all() if d.professor_id in major_ids]
+        else:
+            details = query.all()
         total = len(details)
         updated = 0
         for i, detail in enumerate(details):
@@ -684,6 +696,15 @@ def _list_pdf_section_keys(year: Optional[int], semester: Optional[int]) -> set[
 class LectureBatchBody(BaseModel):
     year: int
     semester: int
+    # 파일명 안의 course_code prefix 기준. "major" = CSE, "liberal" = 그 외, "all" = 전체.
+    division: Literal["major", "liberal", "all"] = "all"
+
+
+def _pdf_is_major(pdf_name: str) -> bool:
+    """PDF 파일명에서 course_code 를 뽑아 CSE prefix 여부 판정."""
+    name_nfc = unicodedata.normalize("NFC", pdf_name)
+    m = re.match(r'^.*?__([A-Z]+\d+)_\d+\.pdf$', name_nfc)
+    return bool(m and m.group(1).startswith("CSE"))
 
 
 class LectureResummarizeBody(BaseModel):
@@ -772,9 +793,13 @@ def resummarize_lectures_stream(
 ):
     def generate():
         pdf_files = _list_syllabi_files(body.year, body.semester)
+        if body.division == "major":
+            pdf_files = [f for f in pdf_files if _pdf_is_major(f.name)]
+        elif body.division == "liberal":
+            pdf_files = [f for f in pdf_files if not _pdf_is_major(f.name)]
         total = len(pdf_files)
 
-        yield f"data: {json.dumps({'type': 'start', 'total': total, 'year': body.year, 'semester': body.semester})}\n\n"
+        yield f"data: {json.dumps({'type': 'start', 'total': total, 'year': body.year, 'semester': body.semester, 'division': body.division})}\n\n"
 
         ok = skip = warn = fail = 0
         for i, pdf_path in enumerate(pdf_files):

@@ -92,13 +92,14 @@ export default function AdminProfessorsPage() {
   }
 
   const runSummarizeAll = async () => {
-    setJob({ type: "running", label: "전체 교수 강의 요약 생성 중..." })
+    const divisionLabel = division === "major" ? "전공" : "교양"
+    setJob({ type: "running", label: `${divisionLabel} 교수 연구분야 요약 생성 중...` })
     setLogs([])
     try {
       const res = await fetch(`${BASE_URL}/admin/professors/summarize-all/stream`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ division }),
       })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const reader = res.body!.getReader()
@@ -190,7 +191,7 @@ export default function AdminProfessorsPage() {
             style={{ backgroundColor: "#B0232A" }}
           >
             {job.type === "running" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            전체 요약 생성
+            {division === "major" ? "전공" : "교양"} 요약 생성
           </Button>
         </div>
       </div>

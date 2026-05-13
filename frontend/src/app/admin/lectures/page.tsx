@@ -122,14 +122,15 @@ export default function AdminLecturesPage() {
   }
 
   const runSummarizeAll = async () => {
-    setJob({ type: "running", label: `${year}-${semester}학기 강의계획서 요약 생성 중...` })
+    const divisionLabel = division === "major" ? "전공" : "교양"
+    setJob({ type: "running", label: `${year}-${semester}학기 ${divisionLabel} 강의계획서 요약 생성 중...` })
     setLogs([])
     setProgress(null)
     try {
       const res = await fetch(`${BASE_URL}/admin/lectures/summarize-all/stream`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ year, semester }),
+        body: JSON.stringify({ year, semester, division }),
       })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const reader = res.body!.getReader()
@@ -287,7 +288,7 @@ export default function AdminLecturesPage() {
             style={{ backgroundColor: "#B0232A" }}
           >
             {job.type === "running" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            전체 요약 생성
+            {division === "major" ? "전공" : "교양"} 요약 생성
           </Button>
         </div>
       </div>
