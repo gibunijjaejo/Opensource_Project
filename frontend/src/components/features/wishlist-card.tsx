@@ -11,7 +11,7 @@ interface WishlistCardProps {
 }
 
 export function WishlistCard({ course, onRemove }: WishlistCardProps) {
-  
+
   return (
     <div className="group flex flex-col gap-3 rounded-md border border-border bg-card p-4 transition-shadow hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles } from "lucide-react"
+import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles, MessageSquare } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
 import { TimetableSlotPanel } from "@/components/features/timetable-slot-panel"
@@ -216,6 +216,39 @@ export default function DashboardPage() {
     router.replace("/login")
   }
 
+  // 관심 과목 섹션 — 모바일에선 시간표 위, 데스크탑에선 사이드바에 동일하게 렌더링
+  const wishlistSection = (
+    <section className="rounded-lg border border-border bg-card p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <BookMarked className="h-4 w-4" style={{ color: "#B0232A" }} />
+        <h2 className="text-sm font-semibold text-foreground">내 관심 과목</h2>
+        <span className="ml-auto text-[10px] text-muted-foreground">
+          {wishlistedCourses.length}개
+        </span>
+      </div>
+
+      {wishlistedCourses.length === 0 ? (
+        <div className="h-[380px] flex flex-col items-center justify-center rounded-md border border-dashed border-border px-3 text-center">
+          <BookMarked className="h-5 w-5 text-muted-foreground/40 mb-1.5" />
+          <p className="text-xs text-muted-foreground">관심 과목이 비어있습니다.</p>
+          <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+            검색에서 ♡ 버튼으로 추가
+          </p>
+        </div>
+      ) : (
+        <div className="h-[380px] overflow-y-auto pr-1 flex flex-col gap-2">
+          {wishlistedCourses.map((course) => (
+            <WishlistCard
+              key={course.id}
+              course={course}
+              onRemove={removeFromWishlist}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -244,12 +277,6 @@ export default function DashboardPage() {
                 <LogOut className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">로그아웃</span>
               </button>
-              <div className="flex items-center gap-1.5">
-                <BookMarked className="h-3.5 w-3.5" style={{ color: "#B0232A" }} />
-                <span className="text-xs font-medium text-muted-foreground">
-                  {wishlistIds.size}개 저장
-                </span>
-              </div>
               <ThemeToggle />
             </div>
           </div>
@@ -260,7 +287,7 @@ export default function DashboardPage() {
       <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
           {/* 중앙 메인 컬럼 */}
-          <div className="flex flex-col gap-10">
+          <div className="flex flex-col gap-6">
 
           {/* Intro */}
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
@@ -336,67 +363,15 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          {/* 내 시간표 — A/B/C/D 4 슬롯 + 고정 + 비교 */}
-          <TimetableSlotPanel
-            timetables={timetables}
-            isLoading={timetablesQuery.isPending}
-            mapApiCourse={mapApiCourse}
-          />
-
-          <div className="border-t border-border" />
-
-          {/* Browse Section — 카드별 [하트(cart 토글)] + [추가(A/B/C/D 슬롯 선택)] */}
-          <BrowseCourses
-            majorCourses={majorCourses}
-            liberalCourses={liberalCourses}
-            wishlistIds={wishlistIds}
-            slotMemberships={slotMemberships}
-            onToggleWishlist={toggleWishlist}
-            onAddToSlot={addToSlot}
-            onLiberalRequested={fetchLiberalIfNeeded}
-            loadingDivision={loadingDivision}
-          />
-
-          {/* Community Board Section — 페이지 맨 밑 */}
-          <section className="rounded-lg border border-border bg-muted/30 p-6">
-            <h2 className="text-sm font-semibold text-foreground mb-1">내 커뮤니티 게시판</h2>
-            <p className="text-xs text-muted-foreground mb-4">선택한 분야의 게시판으로 바로 이동할 수 있습니다.</p>
-            {userInterests.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border px-6 py-8 text-center">
-                <p className="text-sm text-muted-foreground">관심 분야를 선택하면 게시판이 표시됩니다.</p>
-                <Link
-                  href="/profile"
-                  className="text-xs text-muted-foreground/70 mt-1 inline-block hover:text-foreground transition-colors"
-                >
-                  프로필에서 설정하기 →
-                </Link>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {userInterests.map((item) => (
-                  <Link
-                    key={item}
-                    href={`/community/${encodeURIComponent(item)}`}
-                    className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted"
-                    style={{ borderColor: "#B0232A", color: "#B0232A" }}
-                  >
-                    {item} →
-                  </Link>
-                ))}
-              </div>
-            )}
-          </section>
-          </div>
-
-          {/* 우측 sticky 사이드바 — 포트폴리오 + 내 관심 과목 (둘 다 같이 sticky) */}
-          <aside className="lg:sticky lg:top-20 lg:self-start flex flex-col gap-4">
-            {/* 포트폴리오 — 사이드바 상단 */}
+          {/* 포트폴리오 + 커뮤니티 — 같은 카드 톤, 시간표 위 */}
+          <div className="grid gap-3 lg:grid-cols-2">
+            {/* 포트폴리오 */}
             <Link
               href="/portfolio"
               className="group rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow flex items-center gap-3"
             >
               <div
-                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md"
                 style={{ backgroundColor: "rgba(176, 35, 42, 0.1)" }}
               >
                 <Sparkles className="h-4 w-4" style={{ color: "#B0232A" }} />
@@ -411,43 +386,75 @@ export default function DashboardPage() {
                     AI 평가
                   </span>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
-                  활동/자격증/수상/프로젝트 기록 → AI 진로 평가
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed truncate">
+                  활동·자격증·프로젝트 → AI 진로 평가
                 </p>
               </div>
               <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
             </Link>
 
-            {/* 관심 과목 — 항상 3개 카드 만한 고정 높이 (스크롤로 더 보기) */}
-            <section className="rounded-lg border border-border bg-card p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <BookMarked className="h-4 w-4" style={{ color: "#B0232A" }} />
-                <h2 className="text-sm font-semibold text-foreground">내 관심 과목</h2>
-                <span className="ml-auto text-[10px] text-muted-foreground">
-                  {wishlistedCourses.length}개
-                </span>
+            {/* 커뮤니티 게시판 — 포트폴리오와 같은 카드 톤 */}
+            <section className="rounded-lg border border-border bg-card p-4 flex items-center gap-3">
+              <div
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md"
+                style={{ backgroundColor: "rgba(176, 35, 42, 0.1)" }}
+              >
+                <MessageSquare className="h-4 w-4" style={{ color: "#B0232A" }} />
               </div>
-
-              {wishlistedCourses.length === 0 ? (
-                <div className="h-[380px] flex flex-col items-center justify-center rounded-md border border-dashed border-border px-3 text-center">
-                  <BookMarked className="h-5 w-5 text-muted-foreground/40 mb-1.5" />
-                  <p className="text-xs text-muted-foreground">관심 과목이 비어있습니다.</p>
-                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">
-                    검색에서 ♡ 버튼으로 추가
-                  </p>
-                </div>
-              ) : (
-                <div className="h-[380px] overflow-y-auto pr-1 flex flex-col gap-2">
-                  {wishlistedCourses.map((course) => (
-                    <WishlistCard
-                      key={course.id}
-                      course={course}
-                      onRemove={removeFromWishlist}
-                    />
-                  ))}
-                </div>
-              )}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-sm font-semibold text-foreground">내 커뮤니티 게시판</h2>
+                {userInterests.length === 0 ? (
+                  <Link
+                    href="/profile"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-0.5 inline-block"
+                  >
+                    관심 분야를 선택하면 게시판이 표시됩니다 →
+                  </Link>
+                ) : (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {userInterests.map((item) => (
+                      <Link
+                        key={item}
+                        href={`/community/${encodeURIComponent(item)}`}
+                        className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors hover:bg-muted"
+                        style={{ borderColor: "#B0232A", color: "#B0232A" }}
+                      >
+                        {item}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
+          </div>
+
+          {/* 관심 과목 — 모바일/태블릿에서만 시간표 위에 표시 (데스크탑은 사이드바에) */}
+          <div className="lg:hidden">{wishlistSection}</div>
+
+          {/* 내 시간표 — A/B/C/D 4 슬롯 + 고정 + 비교 */}
+          <TimetableSlotPanel
+            timetables={timetables}
+            isLoading={timetablesQuery.isPending}
+            mapApiCourse={mapApiCourse}
+          />
+
+          {/* Browse Section — 카드별 [하트(cart 토글)] + [추가(A/B/C/D 슬롯 선택)] */}
+          <BrowseCourses
+            majorCourses={majorCourses}
+            liberalCourses={liberalCourses}
+            wishlistIds={wishlistIds}
+            slotMemberships={slotMemberships}
+            onToggleWishlist={toggleWishlist}
+            onAddToSlot={addToSlot}
+            onLiberalRequested={fetchLiberalIfNeeded}
+            loadingDivision={loadingDivision}
+          />
+
+          </div>
+
+          {/* 우측 sticky 사이드바 — 데스크탑 전용 (모바일에선 시간표 위에 표시됨) */}
+          <aside className="hidden lg:flex lg:sticky lg:top-20 lg:self-start flex-col gap-4">
+            {wishlistSection}
           </aside>
         </div>
       </main>
