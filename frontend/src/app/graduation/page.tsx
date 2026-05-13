@@ -5,7 +5,7 @@ import { getCurrentSemester } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  ArrowLeft, GraduationCap, CheckCircle2, BookOpen, Clock,
+  ArrowLeft, BookOpen, Clock,
   Loader2, Plus, Pencil, Trash2, X, Search, RotateCcw, ArrowUpDown,
   CalendarPlus,
 } from "lucide-react"
@@ -316,9 +316,8 @@ export default function GraduationPage() {
       <main className="mx-auto max-w-3xl px-4 sm:px-6 py-8">
         <div className="flex flex-col gap-8">
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
-            <h1 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-foreground">
               나의 이수 현황
-              <GraduationCap className="h-5 w-5" style={{ color: "#B0232A" }} />
             </h1>
             <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
               지금까지 이수한 전공·교양 과목과 학점을 확인하세요.
@@ -339,7 +338,6 @@ export default function GraduationPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-border bg-card p-5">
               <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   총 이수 학점
                 </span>
@@ -358,7 +356,6 @@ export default function GraduationPage() {
             </div>
             <div className="rounded-lg border border-border bg-card p-5">
               <div className="flex items-center gap-2 mb-2">
-                <BookOpen className="h-4 w-4" style={{ color: "#B0232A" }} />
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                   이수 과목 수
                 </span>
