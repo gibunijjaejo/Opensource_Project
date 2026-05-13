@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation"
 import { Loader2, RefreshCw, Sparkles, CheckCircle, XCircle, AlertCircle, MinusCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { isMajorCourse } from "@/lib/constants/course-data"
+
+type Division = "major" | "liberal"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
@@ -86,6 +89,7 @@ export default function AdminLecturesPage() {
   const [summaryingId, setSummaryingId] = useState<number | null>(null)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("전체")
+  const [division, setDivision] = useState<Division>("major")
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -239,6 +243,9 @@ export default function AdminLecturesPage() {
   const pdfCount = lectures.filter((l) => l.has_pdf).length
 
   const filtered = lectures.filter((l) => {
+    const isMajor = isMajorCourse(l.course_code)
+    if (division === "major" && !isMajor) return false
+    if (division === "liberal" && isMajor) return false
     const matchSearch =
       search === "" ||
       l.course_code.toLowerCase().includes(search.toLowerCase()) ||
@@ -322,6 +329,25 @@ export default function AdminLecturesPage() {
               </option>
             ))}
           </select>
+          <div className="inline-flex rounded-md border border-border overflow-hidden flex-shrink-0">
+            {([
+              { value: "major", label: "전공" },
+              { value: "liberal", label: "교양" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setDivision(opt.value)}
+                className={`px-3 h-8 text-xs font-medium transition-colors ${
+                  division === opt.value
+                    ? "text-white"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+                style={division === opt.value ? { backgroundColor: "#B0232A" } : {}}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}

@@ -530,6 +530,7 @@ def get_professors(
         {
             "professor_id": p.professor_id,
             "name": p.name,
+            "department": p.department,
             "has_detail": p.professor_id in detail_map,
             "has_research_area": bool(detail_map.get(p.professor_id) and detail_map[p.professor_id].research_area),
             "has_summary": bool(detail_map.get(p.professor_id) and detail_map[p.professor_id].research_summary),

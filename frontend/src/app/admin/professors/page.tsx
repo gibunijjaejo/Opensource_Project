@@ -17,11 +17,14 @@ function getAdminToken() {
 type Professor = {
   professor_id: number
   name: string
+  department: string
   has_detail: boolean
   has_research_area: boolean
   has_summary: boolean
   research_summary: string | null
 }
+
+type Division = "major" | "liberal"
 
 type CrawlResult = {
   updated_count: number
@@ -51,6 +54,7 @@ export default function AdminProfessorsPage() {
   const [summaryingId, setSummaryingId] = useState<number | null>(null)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("전체")
+  const [division, setDivision] = useState<Division>("major")
   const [logs, setLogs] = useState<{ name: string; status: "running" | "done" | "fail" }[]>([])
 
   const token = getAdminToken()
@@ -148,6 +152,9 @@ export default function AdminProfessorsPage() {
   const researchCount = professors.filter((p) => p.has_research_area).length
 
   const filtered = professors.filter((p) => {
+    const isMajor = p.department === "컴퓨터공학과"
+    if (division === "major" && !isMajor) return false
+    if (division === "liberal" && isMajor) return false
     const matchSearch = search === "" || p.name.includes(search) || String(p.professor_id).includes(search)
     const matchFilter =
       filter === "전체" ? true :
@@ -214,6 +221,25 @@ export default function AdminProfessorsPage() {
         </div>
 
         <div className="flex gap-2">
+          <div className="inline-flex rounded-md border border-border overflow-hidden flex-shrink-0">
+            {([
+              { value: "major", label: "전공" },
+              { value: "liberal", label: "교양" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setDivision(opt.value)}
+                className={`px-3 h-8 text-xs font-medium transition-colors ${
+                  division === opt.value
+                    ? "text-white"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+                style={division === opt.value ? { backgroundColor: "#B0232A" } : {}}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
