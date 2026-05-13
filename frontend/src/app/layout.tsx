@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { QueryProvider } from "@/components/layout/query-provider";
 import { AdminMessageModal } from "@/components/features/admin-message-modal";
+import { Toaster } from "@/components/ui/sonner";
 
 const notoSansKR = Noto_Sans_KR({
     subsets: ["latin"],
@@ -42,6 +43,7 @@ export default function RootLayout({
                     >
                         {children}
                         <AdminMessageModal />
+                        <Toaster position="top-center" richColors />
                     </ThemeProvider>
                 </QueryProvider>
             </body>

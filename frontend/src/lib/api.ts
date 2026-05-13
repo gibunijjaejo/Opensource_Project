@@ -145,6 +145,70 @@ export const cartApi = {
     request<void>(`/api/v1/cart/${cartId}`, { method: "DELETE" }),
 }
 
+// ── Timetables (4-슬롯 후보 시간표) ───────────────────
+export type SlotChar = "A" | "B" | "C" | "D"
+
+// 슬롯 표시용 별명 — DB 의 slot 컬럼은 A/B/C/D 로 두고 UI 만 한글로 매핑.
+// 긴 이름: 시간표 탭, 비교 모달 헤더 등 공간 여유 있는 곳.
+export const SLOT_LABELS: Record<SlotChar, string> = {
+  A: "퀸민디",
+  B: "마여니",
+  C: "힝우행우",
+  D: "유화니",
+}
+
+// 짧은 이름: 검색 결과 카드의 슬롯 선택 dropdown 등 좁은 공간.
+export const SLOT_SHORT_LABELS: Record<SlotChar, string> = {
+  A: "퀸ver",
+  B: "마ver",
+  C: "힝ver",
+  D: "유ver",
+}
+
+export interface TimetableCourseItem {
+  course_id: number
+  course?: Course | null
+}
+
+export interface Timetable {
+  id: number
+  slot: SlotChar
+  name: string | null
+  courses: TimetableCourseItem[]
+}
+
+export const timetablesApi = {
+  // A/B/C/D 4 슬롯 모두 (없으면 백엔드가 자동 생성)
+  list: () => request<Timetable[]>("/api/v1/timetables"),
+
+  get: (slot: SlotChar) =>
+    request<Timetable>(`/api/v1/timetables/${slot}`),
+
+  addCourse: (slot: SlotChar, course_id: number) =>
+    request<Timetable>(`/api/v1/timetables/${slot}/courses`, {
+      method: "POST",
+      body: JSON.stringify({ course_id }),
+    }),
+
+  removeCourse: (slot: SlotChar, course_id: number) =>
+    request<void>(`/api/v1/timetables/${slot}/courses/${course_id}`, {
+      method: "DELETE",
+    }),
+
+  rename: (slot: SlotChar, name: string) =>
+    request<Timetable>(`/api/v1/timetables/${slot}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
+
+  // 비교 화면용 — 여러 슬롯을 한 번에. body 는 ["A","B"] 형태 배열.
+  compare: (slots: SlotChar[]) =>
+    request<Timetable[]>("/api/v1/timetables/compare", {
+      method: "POST",
+      body: JSON.stringify(slots),
+    }),
+}
+
 // ── Users ─────────────────────────────────────────────
 export const usersApi = {
   me: () => request<User>("/api/v1/users/me"),
