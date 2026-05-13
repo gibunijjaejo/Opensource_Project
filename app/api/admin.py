@@ -23,7 +23,7 @@ from app.schemas.admin import (
     ReportCountsResponse, ReportItem, ReportActionResponse,
     ContactCountsResponse, ContactItem, MessageResponse,
     UserListItem, CanPostResponse, CanCommentResponse, UserInfoResponse,
-    AdminMessageCreate,
+    AdminMessageCreate, PendingUserItem, ApproveUserResponse,
 )
 from app.models.admin_message import AdminMessage
 from app.services import user_service, report_service
@@ -91,6 +91,51 @@ def health_check(admin: User = Depends(get_current_admin), db: Session = Depends
 
 
 # ── 사용자 관리 ───────────────────────────────────────
+@router.get("/users/pending", response_model=list[PendingUserItem])
+def get_pending_users(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자 승인 대기 중인 사용자 목록.
+
+    회원가입 → 이메일 인증 → `is_approved=False, approval_token=<token>` 상태로 저장됨.
+    관리자가 이 목록에서 승인하거나 거절(삭제)할 수 있음.
+    """
+    users = (
+        db.query(User)
+        .filter(User.is_approved.is_(False))
+        .order_by(User.student_id)
+        .all()
+    )
+    return [
+        {
+            "student_id": u.student_id,
+            "name": u.name,
+            "email": u.email,
+            "current_semester": u.current_semester,
+        }
+        for u in users
+    ]
+
+
+@router.post("/users/{student_id}/approve", response_model=ApproveUserResponse)
+def approve_user(
+    student_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자가 회원가입 신청을 승인. 이메일 링크로 승인하던 흐름을 페이지에서 대체."""
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    if user.is_approved:
+        raise HTTPException(status_code=400, detail="이미 승인된 사용자입니다.")
+    user.is_approved = True
+    user.approval_token = None
+    db.commit()
+    return {"student_id": user.student_id, "is_approved": True}
+
+
 @router.get("/users", response_model=list[UserListItem])
 def get_users(
     q: Optional[str] = None,

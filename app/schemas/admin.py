@@ -86,3 +86,16 @@ class UserInfoResponse(BaseModel):
     name: str
     email: str
     current_semester: Optional[int] = None
+
+
+class PendingUserItem(BaseModel):
+    """이메일 인증은 끝났지만 관리자 승인 대기 중인 사용자."""
+    student_id: int
+    name: str
+    email: str
+    current_semester: Optional[int] = None
+
+
+class ApproveUserResponse(BaseModel):
+    student_id: int
+    is_approved: bool
