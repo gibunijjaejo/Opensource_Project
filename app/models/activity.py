@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -9,6 +9,13 @@ class Track(Base):
 
 class History(Base):
     __tablename__ = "histories"
+    # (학생, 과목코드, 연도, 학기) 조합은 유일 — 같은 학기 같은 과목 중복 불가
+    __table_args__ = (
+        UniqueConstraint(
+            "student_id", "course_code", "year", "semester",
+            name="uq_history_student_course_semester",
+        ),
+    )
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(Integer, ForeignKey("users.student_id"))
     course_code = Column(String(20), nullable=False)

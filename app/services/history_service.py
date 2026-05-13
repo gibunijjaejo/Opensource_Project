@@ -107,9 +107,8 @@ def update_student_history(
 
     old_code = history.course_code
 
-    # 1. 과목 코드를 변경하려는 경우
+    # 1. 과목 코드를 변경하려는 경우 — 실제 존재하는 과목인지 확인
     if history_in.course_code is not None:
-        # 실제 존재하는 과목인지 확인
         course_exists = (
             db.query(Course).filter(Course.course_code == history_in.course_code).first()
         )
@@ -117,23 +116,34 @@ def update_student_history(
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="존재하지 않는 과목 코드입니다.")
 
-        # 이미 내가 이수한 목록에 있는지 중복 확인
-        if history_in.course_code != history.course_code:
-            existing = (
-                db.query(History)
-                .filter(
-                    History.student_id == student_id,
-                    History.course_code == history_in.course_code,
-                )
-                .first()
+    # 2. 수정 후 최종 (코드, 연도, 학기) 결정
+    final_code = history_in.course_code if history_in.course_code is not None else history.course_code
+    final_year = history_in.year if history_in.year is not None else history.year
+    final_semester = history_in.semester if history_in.semester is not None else history.semester
+
+    # 3. 자기 자신을 제외하고 같은 (학생, 코드, 연도, 학기) 튜플이 존재하면 차단
+    if (final_code, final_year, final_semester) != (history.course_code, history.year, history.semester):
+        dup = (
+            db.query(History)
+            .filter(
+                History.student_id == student_id,
+                History.course_code == final_code,
+                History.year == final_year,
+                History.semester == final_semester,
+                History.id != history.id,
             )
-            if existing:
-                from fastapi import HTTPException
-                raise HTTPException(status_code=400, detail="이미 이수한 목록에 있는 과목 코드입니다.")
+            .first()
+        )
+        if dup:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail="같은 학기에 이미 같은 과목이 등록되어 있습니다.",
+            )
 
-            history.course_code = history_in.course_code
-
-    # 2. 연도 및 학기 수정
+    # 4. 값 적용
+    if history_in.course_code is not None:
+        history.course_code = history_in.course_code
     if history_in.year is not None:
         history.year = history_in.year
     if history_in.semester is not None:
@@ -238,7 +248,27 @@ def save_histories(
     같은 호출(=같은 학기) 안에서 같은 코드가 두 번 들어오면 첫 매칭만 저장.
     INSERT 후 _recompute_retake_for 가 같은 (학생, code) 그룹 전체를 시간순
     재정렬해 is_retake 를 일괄 산정한다.
+
+    덮어쓰기: year/semester 가 모두 지정된 경우, 해당 학기의 기존 row 를 먼저 삭제한 뒤
+    이번 매칭 결과로 채운다. 같은 학기에 시간표를 재업로드하면 누적되지 않고 갱신됨.
     """
+    # 덮어쓰기 — 해당 (학생, 학기) 의 기존 row 를 모두 제거
+    overwritten_codes: set[str] = set()
+    if year is not None and semester is not None:
+        existing_rows = (
+            db.query(History)
+            .filter(
+                History.student_id == student_id,
+                History.year == year,
+                History.semester == semester,
+            )
+            .all()
+        )
+        overwritten_codes = {h.course_code for h in existing_rows}
+        for h in existing_rows:
+            db.delete(h)
+        db.flush()
+
     saved_rows: List[Dict[str, Any]] = []
     seen_in_batch: set[str] = set()
 
@@ -272,8 +302,9 @@ def save_histories(
             }
         )
 
-    # 이번 배치에 등장한 코드 각각에 대해 그룹 전체 재계산
-    for code in seen_in_batch:
+    # 이번 배치에 등장한 코드 + 덮어쓰기로 사라진 코드 각각에 대해 그룹 전체 재계산
+    # (사라진 코드는 다른 학기 row 의 재수강 여부가 바뀔 수 있음)
+    for code in seen_in_batch | overwritten_codes:
         _recompute_retake_for(db, student_id, code)
     db.flush()
 
