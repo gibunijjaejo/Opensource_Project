@@ -11,6 +11,11 @@
 services:
     # 백엔드: --reload + 전체 코드 마운트 (핫리로드)
     backend:
+        build:
+            # dev 전용 Dockerfile — docker CLI 설치 스킵으로 빠른 빌드
+            # (admin_assistant docker 도구는 dev에서 거의 안 씀)
+            context: .
+            dockerfile: Dockerfile.dev
         volumes:
             - .:/app
             # admin 챗 운영 어시스턴트가 호스트 docker ps/stats 호출하기 위함.
