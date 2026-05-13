@@ -47,6 +47,18 @@ async def update_history(
     return history_service.update_student_history(db, student_id, history_id, history_in)
 
 
+@router.delete("/me")
+async def delete_all_my_histories(
+    student_id: int = Depends(get_current_student_id),
+    db: Session = Depends(get_db),
+):
+    """
+    현재 로그인한 학생의 모든 이수 기록을 초기화(삭제)합니다.
+    """
+    deleted = history_service.delete_all_student_histories(db, student_id)
+    return {"message": "이수 기록이 초기화되었습니다.", "deleted": deleted}
+
+
 @router.delete("/{history_id}")
 async def delete_history(
     history_id: int,

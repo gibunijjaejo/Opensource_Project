@@ -152,6 +152,19 @@ def update_student_history(
     return history
 
 
+def delete_all_student_histories(db: Session, student_id: int) -> int:
+    """
+    특정 학생의 모든 이수 기록을 삭제하고 삭제된 행 개수를 반환합니다.
+    """
+    deleted = (
+        db.query(History)
+        .filter(History.student_id == student_id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return deleted
+
+
 def delete_student_history(db: Session, student_id: int, history_id: int) -> bool:
     # ... (생략)
     """
