@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import Link from "next/link"
-import { Search, Plus, Heart, X, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { Search, Plus, Heart, X, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, BookOpen } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { type Course, isMajorCourse } from "@/lib/constants/course-data"
@@ -77,14 +77,17 @@ export function BrowseCourses({
   }
 
   return (
-    <section>
+    <section className="rounded-lg border border-border bg-card p-5">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-foreground">26학년도 1학기 과목검색</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {filtered.length}개 / {sourceCourses.length}개 과목
-            {isLoadingThis && <span className="ml-1.5 text-muted-foreground/50">로딩 중...</span>}
-          </p>
+        <div className="flex items-center gap-2 min-w-0">
+          <BookOpen className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-foreground">26학년도 1학기 과목검색</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {filtered.length}개 / {sourceCourses.length}개 과목
+              {isLoadingThis && <span className="ml-1.5 text-muted-foreground/50">로딩 중...</span>}
+            </p>
+          </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto items-center">
           <div className="inline-flex rounded-md border border-border overflow-hidden flex-shrink-0">
@@ -195,22 +198,8 @@ export function BrowseCourses({
                         {course.schedule}
                       </span>
                     </td>
-                    <td className="px-4 py-0">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {/* 하트 — cart(관심 과목) 토글 */}
-                        <button
-                          onClick={() => onToggleWishlist(course.id)}
-                          className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent transition-colors"
-                          title={inWishlist ? "관심 과목 해제" : "관심 과목 추가"}
-                          aria-label={inWishlist ? "관심 해제" : "관심 추가"}
-                        >
-                          <Heart
-                            className="h-3.5 w-3.5"
-                            fill={inWishlist ? "#B0232A" : "transparent"}
-                            stroke={inWishlist ? "#B0232A" : "currentColor"}
-                          />
-                        </button>
-
+                    <td className="px-4 py-0 align-middle">
+                      <div className="flex h-12 items-center justify-end gap-2">
                         {/* 슬롯 추가 — 추가 버튼 클릭 시 absolute dropdown 으로 슬롯 목록 펼침.
                             테이블 td 폭이 좁아 inline 펼침이 잘렸던 문제 해결을 위해 absolute 사용. */}
                         <div className="relative">
@@ -220,7 +209,7 @@ export function BrowseCourses({
                             onClick={() =>
                               setExpandedSlotRow(expandedSlotRow === course.id ? null : course.id)
                             }
-                            className="h-6 px-2 text-xs gap-1 hover:bg-accent whitespace-nowrap"
+                            className="h-7 px-2.5 text-xs gap-1 hover:bg-accent whitespace-nowrap"
                             style={{ color: "#B0232A", borderColor: "#B0232A" } as React.CSSProperties}
                           >
                             <Plus className="h-3 w-3" />
@@ -270,6 +259,21 @@ export function BrowseCourses({
                             </div>
                           )}
                         </div>
+
+                        {/* 하트 — cart(관심 과목) 토글. 테두리 없이 깔끔한 아이콘 버튼. */}
+                        <button
+                          onClick={() => onToggleWishlist(course.id)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent"
+                          title={inWishlist ? "관심 과목 해제" : "관심 과목 추가"}
+                          aria-label={inWishlist ? "관심 해제" : "관심 추가"}
+                        >
+                          <Heart
+                            className="h-4 w-4"
+                            fill={inWishlist ? "#B0232A" : "transparent"}
+                            stroke={inWishlist ? "#B0232A" : "currentColor"}
+                            strokeWidth={inWishlist ? 0 : 2}
+                          />
+                        </button>
                       </div>
                     </td>
                   </tr>

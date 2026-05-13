@@ -7,7 +7,10 @@ import type { Course } from "@/lib/constants/course-data"
 const DAYS = ["월", "화", "수", "목", "금", "토", "일"] as const
 const START_HOUR = 9
 const END_HOUR = 21
-const ROW_HEIGHT = 56
+const ROW_HEIGHT_DESKTOP = 40
+const ROW_HEIGHT_MOBILE = 32
+const HOUR_COL_WIDTH_DESKTOP = 40
+const HOUR_COL_WIDTH_MOBILE = 24
 
 const PALETTE = [
   { bg: "#F8B4B4", fg: "#7A1F1F" }, // pink/red
@@ -73,8 +76,25 @@ interface TimetableGridProps {
 export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
   const blocks = buildBlocks(courses)
   const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i)
-  const gridHeight = (END_HOUR - START_HOUR) * ROW_HEIGHT
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
+
+  // 모바일 감지 — 작은 화면에선 행 높이/시간 컬럼 폭 축소 + 강의 없는 토/일 자동 숨김
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640)
+    check()
+    window.addEventListener("resize", check)
+    return () => window.removeEventListener("resize", check)
+  }, [])
+
+  // 모바일이고 토/일 강의 없으면 평일만 노출 (좁은 화면 공간 활용)
+  const hasWeekendCourse = blocks.some((b) => b.dayIdx >= 5)
+  const visibleDays = isMobile && !hasWeekendCourse ? DAYS.slice(0, 5) : DAYS
+
+  const rowHeight = isMobile ? ROW_HEIGHT_MOBILE : ROW_HEIGHT_DESKTOP
+  const hourColWidth = isMobile ? HOUR_COL_WIDTH_MOBILE : HOUR_COL_WIDTH_DESKTOP
+  const gridHeight = (END_HOUR - START_HOUR) * rowHeight
+  const gridTemplate = `${hourColWidth}px repeat(${visibleDays.length}, minmax(0, 1fr))`
 
   // 강의 목록이 바뀌면 선택 상태 초기화 (제거 후 다른 강의가 선택된 채로 남지 않게)
   useEffect(() => {
@@ -86,13 +106,13 @@ export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
       {/* Day header */}
       <div
         className="grid border-b border-border bg-muted/40"
-        style={{ gridTemplateColumns: `40px repeat(${DAYS.length}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: gridTemplate }}
       >
         <div />
-        {DAYS.map((d) => (
+        {visibleDays.map((d) => (
           <div
             key={d}
-            className="py-2 text-center text-xs font-semibold text-muted-foreground"
+            className="py-1.5 sm:py-2 text-center text-[11px] sm:text-xs font-semibold text-muted-foreground"
           >
             {d}
           </div>
@@ -103,7 +123,7 @@ export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
       <div
         className="grid relative"
         style={{
-          gridTemplateColumns: `40px repeat(${DAYS.length}, minmax(0, 1fr))`,
+          gridTemplateColumns: gridTemplate,
           height: gridHeight,
         }}
       >
@@ -112,8 +132,8 @@ export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
           {hours.map((h, i) => (
             <div
               key={h}
-              className="absolute left-0 right-0 text-[10px] text-muted-foreground text-center pt-0.5"
-              style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
+              className="absolute left-0 right-0 text-[9px] sm:text-[10px] text-muted-foreground text-center pt-0.5"
+              style={{ top: i * rowHeight, height: rowHeight }}
             >
               {h}
             </div>
@@ -121,20 +141,20 @@ export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
         </div>
 
         {/* Day columns with hour grid lines */}
-        {DAYS.map((d, di) => (
+        {visibleDays.map((d, di) => (
           <div key={d} className="relative border-r border-border last:border-r-0">
             {hours.map((h, i) => (
               <div
                 key={h}
                 className="absolute left-0 right-0 border-b border-border/60"
-                style={{ top: i * ROW_HEIGHT, height: ROW_HEIGHT }}
+                style={{ top: i * rowHeight, height: rowHeight }}
               />
             ))}
             {blocks
               .filter((b) => b.dayIdx === di)
               .map((b) => {
-                const top = (b.startH - START_HOUR) * ROW_HEIGHT
-                const height = (b.endH - b.startH) * ROW_HEIGHT
+                const top = (b.startH - START_HOUR) * rowHeight
+                const height = (b.endH - b.startH) * rowHeight
                 const color = pickColor(b.course.id)
                 const isSelected = selectedCourseId === b.course.id
                 const canRemove = !!onRemoveCourse
@@ -145,7 +165,7 @@ export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
                       if (!canRemove) return
                       setSelectedCourseId(isSelected ? null : b.course.id)
                     }}
-                    className={`absolute left-1 right-1 rounded-md px-1.5 py-1 text-[11px] leading-tight overflow-hidden transition-all ${
+                    className={`absolute left-0.5 right-0.5 sm:left-1 sm:right-1 rounded-md px-1 sm:px-1.5 py-0.5 sm:py-1 text-[10px] sm:text-[11px] leading-tight overflow-hidden transition-all ${
                       canRemove ? "cursor-pointer" : ""
                     } ${isSelected ? "ring-2 ring-offset-1" : ""}`}
                     style={{
@@ -160,7 +180,7 @@ export function TimetableGrid({ courses, onRemoveCourse }: TimetableGridProps) {
                     <div className="font-semibold break-words [overflow-wrap:anywhere]">
                       {b.course.name}
                     </div>
-                    <div className="break-words opacity-80 [overflow-wrap:anywhere]">
+                    <div className="break-words opacity-80 [overflow-wrap:anywhere] hidden sm:block">
                       {b.course.code}
                     </div>
 

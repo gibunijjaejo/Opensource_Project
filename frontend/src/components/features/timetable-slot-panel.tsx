@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Columns3, Loader2, Pin, PinOff } from "lucide-react"
+import { Calendar, Columns3, Loader2, Pin, PinOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TimetableGrid } from "@/components/features/timetable-grid"
 import { CompareModal } from "@/components/features/compare-modal"
@@ -119,46 +119,51 @@ export function TimetableSlotPanel({ timetables, isLoading, mapApiCourse }: Time
     const isPinned = pinnedSlot === activeSlot
 
     return (
-        <section>
-            {/* 헤더 */}
-            <div className="mb-3 flex items-end justify-between">
-                <div>
-                    <h2 className="text-base font-semibold text-foreground">내 시간표</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        4개 슬롯 중 하나를 고정해두면 다음 방문 때도 그 슬롯이 먼저 보입니다.
-                    </p>
+        <section className="rounded-lg border border-border bg-card p-5">
+            {/* 헤더 — 다른 섹션과 동일한 패턴 (아이콘 + 제목 + 부제 + 액션) */}
+            <div className="mb-4 flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                    <Calendar className="h-4 w-4 flex-shrink-0" style={{ color: "#B0232A" }} />
+                    <div className="min-w-0">
+                        <h2 className="text-sm font-semibold text-foreground">내 시간표</h2>
+                        <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+                            슬롯을 고정하면 다음 방문 시 자동 선택됩니다
+                        </p>
+                    </div>
                 </div>
                 <Button
                     size="sm"
                     onClick={() => setCompareOpen(true)}
-                    className="h-8 gap-1.5 text-xs"
+                    className="h-8 gap-1.5 text-xs flex-shrink-0"
                     style={{ backgroundColor: "#B0232A" }}
                 >
                     <Columns3 className="h-3.5 w-3.5" />
-                    시간표 비교
+                    <span className="hidden sm:inline">시간표 비교</span>
+                    <span className="sm:hidden">비교</span>
                 </Button>
             </div>
 
             {/* 슬롯 탭 + 고정 버튼 */}
-            <div className="mb-3 flex items-center gap-2 flex-wrap">
+            <div className="mb-4 flex items-center gap-2 flex-wrap">
                 <div className="inline-flex rounded-md border border-border overflow-hidden">
                     {SLOTS.map((s) => {
                         const pinned = pinnedSlot === s
+                        const active = activeSlot === s
                         return (
                             <button
                                 key={s}
                                 onClick={() => setActiveSlot(s)}
-                                className={`px-3 h-9 text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                                    activeSlot === s
+                                className={`px-3 h-8 text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                                    active
                                         ? "text-white"
                                         : "text-muted-foreground hover:bg-muted"
                                 }`}
-                                style={activeSlot === s ? { backgroundColor: "#B0232A" } : {}}
+                                style={active ? { backgroundColor: "#B0232A" } : {}}
                                 title={pinned ? `${SLOT_LABELS[s]} 슬롯은 고정됨` : ""}
                             >
                                 <span className="font-semibold">{SLOT_LABELS[s]}</span>
                                 {pinned && <Pin className="h-3 w-3" />}
-                                <span className="text-xs opacity-75">
+                                <span className="text-[10px] opacity-75">
                                     ({slotCountMap[s]})
                                 </span>
                             </button>
@@ -169,18 +174,20 @@ export function TimetableSlotPanel({ timetables, isLoading, mapApiCourse }: Time
                     size="sm"
                     variant="outline"
                     onClick={togglePin}
-                    className="h-9 gap-1.5 text-xs"
+                    className="h-8 gap-1.5 text-xs"
                     title={isPinned ? `${SLOT_LABELS[activeSlot]} 고정 해제` : `${SLOT_LABELS[activeSlot]} 고정 (다음 방문 시 자동 선택)`}
                 >
                     {isPinned ? (
                         <>
-                            <PinOff className="h-3.5 w-3.5" />
-                            고정 해제
+                            <PinOff className="h-3 w-3" />
+                            <span className="hidden sm:inline">고정 해제</span>
+                            <span className="sm:hidden">해제</span>
                         </>
                     ) : (
                         <>
-                            <Pin className="h-3.5 w-3.5" />
-                            이 슬롯 고정
+                            <Pin className="h-3 w-3" />
+                            <span className="hidden sm:inline">이 슬롯 고정</span>
+                            <span className="sm:hidden">고정</span>
                         </>
                     )}
                 </Button>
@@ -188,7 +195,7 @@ export function TimetableSlotPanel({ timetables, isLoading, mapApiCourse }: Time
 
             {/* 활성 슬롯 시간표 그리드 — 블록 클릭 시 ✕ 제거 버튼 노출 */}
             {isLoading ? (
-                <div className="rounded-md border border-border bg-card px-6 py-16 text-center">
+                <div className="rounded-md border border-dashed border-border bg-muted/30 px-6 py-16 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                     <p className="text-xs text-muted-foreground mt-2">슬롯 불러오는 중...</p>
                 </div>
@@ -197,8 +204,8 @@ export function TimetableSlotPanel({ timetables, isLoading, mapApiCourse }: Time
             )}
 
             {/* 슬롯 안내 */}
-            <p className="mt-2 text-[11px] text-muted-foreground">
-                💡 시간표의 강의를 한 번 누르면 제거 버튼이 나옵니다.
+            <p className="mt-3 text-[11px] text-muted-foreground/70">
+                💡 시간표의 강의를 누르면 제거 버튼이 나옵니다.
             </p>
 
             {/* 비교 모달 */}
