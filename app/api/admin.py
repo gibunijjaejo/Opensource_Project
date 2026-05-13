@@ -8,11 +8,11 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError
+from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Literal, Optional
 from app.database import get_db
 from app.models.user import User
 from app.models.post import Post, Comment
@@ -23,7 +23,7 @@ from app.schemas.admin import (
     ReportCountsResponse, ReportItem, ReportActionResponse,
     ContactCountsResponse, ContactItem, MessageResponse,
     UserListItem, CanPostResponse, CanCommentResponse, UserInfoResponse,
-    AdminMessageCreate,
+    AdminMessageCreate, PendingUserItem, ApproveUserResponse,
 )
 from app.models.admin_message import AdminMessage
 from app.services import user_service, report_service
@@ -50,7 +50,7 @@ def get_current_admin(
 ) -> User:
     try:
         student_id = user_service.decode_token(credentials.credentials)
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(status_code=401, detail="유효하지 않은 토큰입니다.")
     user = db.query(User).filter(User.student_id == student_id).first()
     if not user or user.role != "admin":
@@ -91,6 +91,51 @@ def health_check(admin: User = Depends(get_current_admin), db: Session = Depends
 
 
 # ── 사용자 관리 ───────────────────────────────────────
+@router.get("/users/pending", response_model=list[PendingUserItem])
+def get_pending_users(
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자 승인 대기 중인 사용자 목록.
+
+    회원가입 → 이메일 인증 → `is_approved=False, approval_token=<token>` 상태로 저장됨.
+    관리자가 이 목록에서 승인하거나 거절(삭제)할 수 있음.
+    """
+    users = (
+        db.query(User)
+        .filter(User.is_approved.is_(False))
+        .order_by(User.student_id)
+        .all()
+    )
+    return [
+        {
+            "student_id": u.student_id,
+            "name": u.name,
+            "email": u.email,
+            "current_semester": u.current_semester,
+        }
+        for u in users
+    ]
+
+
+@router.post("/users/{student_id}/approve", response_model=ApproveUserResponse)
+def approve_user(
+    student_id: int,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """관리자가 회원가입 신청을 승인. 이메일 링크로 승인하던 흐름을 페이지에서 대체."""
+    user = db.query(User).filter(User.student_id == student_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+    if user.is_approved:
+        raise HTTPException(status_code=400, detail="이미 승인된 사용자입니다.")
+    user.is_approved = True
+    user.approval_token = None
+    db.commit()
+    return {"student_id": user.student_id, "is_approved": True}
+
+
 @router.get("/users", response_model=list[UserListItem])
 def get_users(
     q: Optional[str] = None,
@@ -485,6 +530,7 @@ def get_professors(
         {
             "professor_id": p.professor_id,
             "name": p.name,
+            "department": p.department,
             "has_detail": p.professor_id in detail_map,
             "has_research_area": bool(detail_map.get(p.professor_id) and detail_map[p.professor_id].research_area),
             "has_summary": bool(detail_map.get(p.professor_id) and detail_map[p.professor_id].research_summary),
@@ -504,6 +550,8 @@ def crawl_professors(
 
 class SummarizeBody(BaseModel):
     prompt_override: str | None = None
+    # Professor.department 기준. "major" = 컴퓨터공학과, "liberal" = 그 외, "all" = 전체.
+    division: Literal["major", "liberal", "all"] = "all"
 
 
 @router.post("/professors/summarize-all")
@@ -538,11 +586,21 @@ def resummarize_all_stream(
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    from app.models.professor import ProfessorDetail
+    from app.models.professor import Professor, ProfessorDetail
     from app.services.crawl_service import _summarize_research_area, _to_plain
 
     def generate():
-        details = db.query(ProfessorDetail).filter(ProfessorDetail.research_area.isnot(None)).all()
+        query = db.query(ProfessorDetail).filter(ProfessorDetail.research_area.isnot(None))
+        if body.division != "all":
+            target_dept = "컴퓨터공학과" if body.division == "major" else "교양"
+            major_ids = {
+                pid for (pid,) in db.query(Professor.professor_id)
+                .filter(Professor.department == target_dept)
+                .all()
+            }
+            details = [d for d in query.all() if d.professor_id in major_ids]
+        else:
+            details = query.all()
         total = len(details)
         updated = 0
         for i, detail in enumerate(details):
@@ -638,6 +696,15 @@ def _list_pdf_section_keys(year: Optional[int], semester: Optional[int]) -> set[
 class LectureBatchBody(BaseModel):
     year: int
     semester: int
+    # 파일명 안의 course_code prefix 기준. "major" = CSE, "liberal" = 그 외, "all" = 전체.
+    division: Literal["major", "liberal", "all"] = "all"
+
+
+def _pdf_is_major(pdf_name: str) -> bool:
+    """PDF 파일명에서 course_code 를 뽑아 CSE prefix 여부 판정."""
+    name_nfc = unicodedata.normalize("NFC", pdf_name)
+    m = re.match(r'^.*?__([A-Z]+\d+)_\d+\.pdf$', name_nfc)
+    return bool(m and m.group(1).startswith("CSE"))
 
 
 class LectureResummarizeBody(BaseModel):
@@ -726,9 +793,13 @@ def resummarize_lectures_stream(
 ):
     def generate():
         pdf_files = _list_syllabi_files(body.year, body.semester)
+        if body.division == "major":
+            pdf_files = [f for f in pdf_files if _pdf_is_major(f.name)]
+        elif body.division == "liberal":
+            pdf_files = [f for f in pdf_files if not _pdf_is_major(f.name)]
         total = len(pdf_files)
 
-        yield f"data: {json.dumps({'type': 'start', 'total': total, 'year': body.year, 'semester': body.semester})}\n\n"
+        yield f"data: {json.dumps({'type': 'start', 'total': total, 'year': body.year, 'semester': body.semester, 'division': body.division})}\n\n"
 
         ok = skip = warn = fail = 0
         for i, pdf_path in enumerate(pdf_files):

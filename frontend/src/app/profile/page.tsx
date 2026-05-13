@@ -128,7 +128,7 @@ export default function ProfilePage() {
               <span>이전</span>
             </button>
             <Link
-              href="/"
+              href="/dashboard"
               className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2"
             >
               <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
@@ -241,13 +241,6 @@ export default function ProfilePage() {
               })}
             </div>
 
-            {profile.interests.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground">
-                  선택됨: {profile.interests.join(", ")}
-                </p>
-              </div>
-            )}
           </section>
 
           {/* 커뮤니티 바로가기 */}

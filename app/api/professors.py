@@ -8,13 +8,20 @@ from app.schemas.course import ProfessorResponse
 
 router = APIRouter(prefix="/api/v1/professors", tags=["Professors"])
 
+# 프로필 노출 대상 학과 — 교양 교수는 목록·상세 어디에도 노출하지 않는다.
+PROFILE_DEPARTMENT = "컴퓨터공학과"
+
 
 @router.get("", response_model=List[ProfessorResponse])
 def get_professors(
     db: Session = Depends(get_db),
     q: Optional[str] = Query(None, description="교수명 검색"),
 ):
-    query = db.query(Professor).options(joinedload(Professor.details))
+    query = (
+        db.query(Professor)
+        .options(joinedload(Professor.details))
+        .filter(Professor.department == PROFILE_DEPARTMENT)
+    )
     if q:
         query = query.filter(Professor.name.ilike(f"%{q}%"))
     return query.order_by(Professor.name).all()
@@ -25,7 +32,10 @@ def get_professor(professor_id: int, db: Session = Depends(get_db)):
     prof = (
         db.query(Professor)
         .options(joinedload(Professor.details))
-        .filter(Professor.professor_id == professor_id)
+        .filter(
+            Professor.professor_id == professor_id,
+            Professor.department == PROFILE_DEPARTMENT,
+        )
         .first()
     )
     if not prof:

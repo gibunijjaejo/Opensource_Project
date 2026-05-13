@@ -127,6 +127,9 @@ reports/
 frontend/playwright-report/
 frontend/test-results/
 
+### 보안 스캔 결과 (Trivy 등) ###
+security-reports/
+
 ### 루트 Node 파일 (프론트엔드는 frontend/ 에서 관리) ###
 node_modules/
 package.json

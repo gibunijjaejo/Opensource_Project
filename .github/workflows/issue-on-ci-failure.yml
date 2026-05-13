@@ -1,0 +1,68 @@
+name: Issue on CI Failure
+
+# CI 워크플로우(ci.yml)가 dev/main에서 실패하면 자동으로 이슈를 생성한다.
+# 이미 열린 동일 카테고리 이슈가 있으면 중복 생성 안 함.
+# 같은 커밋에서 발생한 실패는 한 이슈에 누적 코멘트로 기록.
+
+on:
+    workflow_run:
+        workflows: ["CI"]
+        types: [completed]
+        branches: [dev, main]
+
+jobs:
+    create-issue:
+        if: github.event.workflow_run.conclusion == 'failure'
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+            actions: read
+        steps:
+            - name: 이슈 생성 또는 코멘트 추가
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const run = context.payload.workflow_run;
+                      const branch = run.head_branch;
+                      const sha = run.head_sha.substring(0, 8);
+                      const runUrl = run.html_url;
+                      const title = `CI 실패 — ${branch} 브랜치`;
+
+                      // 이미 열린 같은 제목 이슈 찾기
+                      const { data: existing } = await github.rest.issues.listForRepo({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          state: 'open',
+                          labels: 'ci-failure',
+                      });
+                      const dup = existing.find(i => i.title === title);
+
+                      const body = [
+                          `**브랜치:** \`${branch}\``,
+                          `**커밋:** \`${sha}\``,
+                          `**워크플로우:** [#${run.run_number}](${runUrl})`,
+                          `**실패 시각:** ${new Date(run.updated_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+                          ``,
+                          `---`,
+                          `자동 생성된 이슈입니다. 동일 브랜치에서 다시 실패하면 코멘트로 누적됩니다.`,
+                          `해결 후 이슈 닫으면, 다음 실패 시 새 이슈가 다시 생성됩니다.`,
+                      ].join('\n');
+
+                      if (dup) {
+                          await github.rest.issues.createComment({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              issue_number: dup.number,
+                              body: `🔁 또 실패했습니다.\n\n${body}`,
+                          });
+                          core.info(`기존 이슈 #${dup.number}에 코멘트 추가`);
+                      } else {
+                          const { data: created } = await github.rest.issues.create({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              title,
+                              body,
+                              labels: ['ci-failure', 'bug', 'automated'],
+                          });
+                          core.info(`새 이슈 #${created.number} 생성됨`);
+                      }

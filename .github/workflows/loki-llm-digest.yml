@@ -1,0 +1,267 @@
+name: Loki LLM Digest
+
+# Loki에서 어제 ERROR 로그를 추출 → Gemini로 패턴 분석 → GitHub 이슈 생성
+#
+# 사전 준비:
+# 1. GitHub Repository Secrets 등록:
+#    - LOKI_URL       (예: http://163.239.77.66)
+#    - LOKI_USER      (예: loki-bot)
+#    - LOKI_PASS      (htpasswd 비밀번호)
+#    - GEMINI_API_KEY (.env 파일의 GEMINI_API_KEY 값)
+# 2. Loki에 접근 가능한 nginx 리버스 프록시 (Basic Auth 적용)
+#
+# 비용: Gemini 2.5 Flash 무료 티어 (1500 req/일 한도)
+# 일일 1회 실행 시 사실상 무료
+
+on:
+    schedule:
+        - cron: "0 18 * * *" # 매일 새벽 3시 KST
+    workflow_dispatch:
+        inputs:
+            hours:
+                description: "몇 시간 전부터 집계할지"
+                default: "24"
+                required: false
+
+jobs:
+    digest:
+        name: Loki ERROR 로그 → Gemini 분석 → 이슈
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+        env:
+            LOKI_URL: ${{ secrets.LOKI_URL }}
+            LOKI_USER: ${{ secrets.LOKI_USER }}
+            LOKI_PASS: ${{ secrets.LOKI_PASS }}
+            GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+            HOURS: ${{ inputs.hours || '24' }}
+
+        steps:
+            - name: 시크릿 검증
+              run: |
+                  for s in LOKI_URL LOKI_USER LOKI_PASS GEMINI_API_KEY; do
+                    if [ -z "${!s}" ]; then
+                      echo "❌ Secret $s 미설정"
+                      echo "Settings → Secrets and variables → Actions에 등록 필요"
+                      exit 1
+                    fi
+                  done
+                  echo "✅ 모든 시크릿 등록됨"
+
+            - name: Loki에서 ERROR 로그 추출
+              id: extract
+              run: |
+                  END_NS=$(date +%s)000000000
+                  START_NS=$(($(date +%s) - HOURS * 3600))000000000
+
+                  echo "기간: 최근 ${HOURS}시간"
+
+                  # seoganpyo 컨테이너에서 ERROR 패턴 검색
+                  # 경로 주의: nginx가 /loki/ prefix 제거하므로 /loki/loki/api/...로 호출
+                  curl -sG -u "$LOKI_USER:$LOKI_PASS" \
+                    "$LOKI_URL/loki/loki/api/v1/query_range" \
+                    --data-urlencode 'query={compose_project="seoganpyo"} |~ "(?i)error|exception|traceback|fatal"' \
+                    --data-urlencode "start=$START_NS" \
+                    --data-urlencode "end=$END_NS" \
+                    --data-urlencode "limit=500" \
+                    --data-urlencode "direction=backward" \
+                    > loki-result.json
+
+                  if ! jq -e '.data.result' loki-result.json > /dev/null 2>&1; then
+                    echo "❌ Loki 응답 파싱 실패"
+                    cat loki-result.json | head -20
+                    exit 1
+                  fi
+
+                  TOTAL=$(jq '[.data.result[].values[]] | length' loki-result.json)
+                  echo "TOTAL=$TOTAL" >> $GITHUB_ENV
+                  echo "추출된 ERROR 라인: $TOTAL건"
+
+                  # 컨테이너별 카운트
+                  jq -r '.data.result[] | "\(.stream.container // "unknown"): \(.values | length)"' loki-result.json \
+                    | sort | uniq -c | sort -rn > by-container.txt
+
+                  # 로그 라인 텍스트로 (컨테이너 정보 포함)
+                  jq -r '.data.result[] | .stream.container as $c | .values[] | "[\($c)] \(.[1])"' loki-result.json \
+                    | head -150 > errors.txt
+
+                  echo "--- 컨테이너별 분포 ---"
+                  cat by-container.txt
+                  echo "--- 샘플 라인 ---"
+                  head -5 errors.txt
+
+            - name: ERROR 없으면 종료
+              if: env.TOTAL == '0'
+              run: |
+                  echo "✅ 분석 대상 ERROR 없음 — 이슈 생성 스킵"
+                  exit 0
+
+            - name: Gemini로 패턴 분석
+              if: env.TOTAL != '0'
+              run: |
+                  CONTAINER_DIST=$(cat by-container.txt)
+                  LOG_SAMPLE=$(head -100 errors.txt)
+
+                  PROMPT="당신은 백엔드 운영 엔지니어입니다. 다음 ERROR 로그를 분석하고 JSON으로 응답하세요.
+
+                  스택: FastAPI(seoganpyo-api) + Next.js(seoganpyo-frontend) + Mistral Pixtral OCR(seoganpyo-ocr) + Redis + Promtail
+
+                  ## 컨테이너별 분포
+                  $CONTAINER_DIST
+
+                  ## 로그 샘플 (최대 100줄)
+                  $LOG_SAMPLE
+
+                  ## 응답 형식 (JSON, 마크다운 코드블록 없이)
+                  {
+                    \"summary\": \"전체 상황 한 문단 요약 (한국어, 2-3문장)\",
+                    \"severity\": \"low|medium|high\",
+                    \"patterns\": [
+                      {
+                        \"name\": \"패턴 이름 (간결하게)\",
+                        \"count\": 47,
+                        \"affected\": \"영향받은 컴포넌트/엔드포인트\",
+                        \"cause\": \"추정 원인 (구체적으로)\",
+                        \"action\": \"권장 조치 (실행 가능한 형태)\"
+                      }
+                    ],
+                    \"noise\": \"무시해도 될 정상 ERROR가 있다면 한 줄 (예: JWT 만료는 정상)\"
+                  }
+
+                  중요:
+                  - 비슷한 ERROR는 한 패턴으로 묶기
+                  - 정상 동작인 ERROR (예: 401 인증 실패, JWT 만료)는 noise에
+                  - severity는 사용자 영향 기준 (high=장애, medium=일부 기능, low=무시 가능)
+                  - 모든 텍스트는 한국어로"
+
+                  jq -n --arg prompt "$PROMPT" '{
+                    contents: [{parts: [{text: $prompt}]}],
+                    generationConfig: {
+                      temperature: 0.3,
+                      responseMimeType: "application/json"
+                    }
+                  }' > gemini-request.json
+
+                  HTTP_CODE=$(curl -s -o gemini-response.json -w "%{http_code}" \
+                    -X POST \
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
+                    -H "Content-Type: application/json" \
+                    -d @gemini-request.json)
+
+                  if [ "$HTTP_CODE" != "200" ]; then
+                    echo "❌ Gemini API 오류 (HTTP $HTTP_CODE)"
+                    cat gemini-response.json
+                    exit 1
+                  fi
+
+                  # 응답에서 분석 결과 추출
+                  jq -r '.candidates[0].content.parts[0].text' gemini-response.json > analysis.json
+
+                  if ! jq -e . analysis.json > /dev/null 2>&1; then
+                    echo "❌ Gemini가 유효한 JSON 반환 안 함"
+                    cat analysis.json
+                    exit 1
+                  fi
+
+                  echo "--- Gemini 분석 결과 ---"
+                  jq . analysis.json
+
+            - name: 이슈 생성 또는 업데이트
+              if: env.TOTAL != '0'
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+                      const analysis = JSON.parse(fs.readFileSync('analysis.json', 'utf8'));
+                      const containerDist = fs.readFileSync('by-container.txt', 'utf8');
+                      const today = new Date().toISOString().split('T')[0];
+                      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+                      const sevEmoji = {
+                          'high': '🔴',
+                          'medium': '🟡',
+                          'low': '🟢',
+                      }[analysis.severity] || '⚪';
+
+                      const lines = [
+                          `## ${sevEmoji} 요약`,
+                          analysis.summary,
+                          ``,
+                          `| 항목 | 값 |`,
+                          `|------|-----|`,
+                          `| **심각도** | ${analysis.severity} |`,
+                          `| **총 ERROR 라인** | ${process.env.TOTAL}건 |`,
+                          `| **분석 기간** | 최근 ${process.env.HOURS}시간 |`,
+                          `| **분석 모델** | Gemini 2.5 Flash |`,
+                          ``,
+                          `## 📊 컨테이너별 분포`,
+                          '```',
+                          containerDist.trim(),
+                          '```',
+                          ``,
+                          `## 🔍 패턴 분석`,
+                          ``,
+                      ];
+
+                      for (const p of analysis.patterns) {
+                          lines.push(`### ${p.name} (${p.count}건)`);
+                          if (p.affected) lines.push(`- **영향:** ${p.affected}`);
+                          lines.push(`- **원인 추정:** ${p.cause}`);
+                          lines.push(`- **권장 조치:** ${p.action}`);
+                          lines.push(``);
+                      }
+
+                      if (analysis.noise) {
+                          lines.push(`## 🔇 노이즈 (정상 ERROR)`);
+                          lines.push(analysis.noise);
+                          lines.push(``);
+                      }
+
+                      lines.push(`---`);
+                      lines.push(`자동 생성 — Loki + Gemini AI 분석`);
+                      lines.push(`Grafana에서 자세히: 대시보드 \`seoganpyo-overview\``);
+
+                      const title = `${sevEmoji} ERROR 다이제스트 (AI) — ${yesterday}`;
+
+                      // 같은 제목 이슈 있으면 코멘트로 누적
+                      const { data: existing } = await github.rest.issues.listForRepo({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          state: 'open',
+                          labels: 'ai-analyzed',
+                      });
+                      const dup = existing.find(i => i.title === title);
+
+                      const labels = ['observability', 'ai-analyzed', 'automated'];
+                      if (analysis.severity === 'high') labels.push('high-priority');
+
+                      if (dup) {
+                          await github.rest.issues.createComment({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              issue_number: dup.number,
+                              body: `🔁 재분석:\n\n${lines.join('\n')}`,
+                          });
+                          core.info(`기존 이슈 #${dup.number}에 코멘트 추가`);
+                      } else {
+                          const { data: created } = await github.rest.issues.create({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              title,
+                              body: lines.join('\n'),
+                              labels,
+                          });
+                          core.info(`새 이슈 #${created.number} 생성됨`);
+                      }
+
+            - name: 결과 아티팩트 업로드
+              if: always() && env.TOTAL != '0'
+              uses: actions/upload-artifact@v4
+              with:
+                  name: digest-${{ github.run_number }}
+                  path: |
+                      loki-result.json
+                      errors.txt
+                      analysis.json
+                      gemini-response.json
+                  retention-days: 7

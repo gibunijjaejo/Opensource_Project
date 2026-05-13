@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta
-from jose import jwt
+import jwt
 from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.orm import Session

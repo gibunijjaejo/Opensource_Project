@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin/chat", tags=["AdminChat"])
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "MYKEY")
-GEMINI_MODEL = os.getenv("ADMIN_CHAT_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.0-flash"))
+GEMINI_MODEL = os.getenv("ADMIN_CHAT_MODEL", os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
 # 503/UNAVAILABLE 시 자동 폴백 모델 (시연 안정성용)
-# gemini-2.0-flash-lite는 2026년부터 신규 사용자에게 deprecated → 2.5 계열로.
+# gemini-2.0 계열은 2026년부터 신규 사용자에게 deprecated → 2.5 계열로.
 FALLBACK_MODEL = os.getenv("ADMIN_CHAT_FALLBACK_MODEL", "gemini-2.5-flash-lite")
 GEMINI_URL_TEMPLATE = (
     "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -162,14 +162,20 @@ def _post_gemini(model: str, payload: dict) -> tuple[int, str, dict | None]:
     return res.status_code, text, body_json
 
 
-def _call_gemini(contents: list[dict], tool_decls: list[dict]) -> tuple[dict, str]:
+def _call_gemini(
+    contents: list[dict],
+    tool_decls: list[dict],
+    system_prompt: str = SYSTEM_PROMPT,
+) -> tuple[dict, str]:
     """Gemini 호출. 503/UNAVAILABLE 시 같은 모델로 재시도 후 폴백 모델로 전환.
+
+    system_prompt 를 인자로 받음 — 보안 채팅 같은 다른 도메인에서 재사용할 때 자체 프롬프트 주입.
 
     Returns:
         (응답 JSON, 실제 사용된 모델명)
     """
     payload = {
-        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "systemInstruction": {"parts": [{"text": system_prompt}]},
         "contents": contents,
         "tools": [{"functionDeclarations": tool_decls}],
         "generationConfig": {"temperature": 0.2},

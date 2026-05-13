@@ -1,33 +1,50 @@
+# ── 공통 로깅 정책 (YAML anchor) ──
+# 컨테이너 stdout 누적으로 디스크 차는 사고 방지.
+# 모든 서비스가 동일한 회전 정책 사용 (각 서비스에서 *default-logging 으로 참조).
+x-logging: &default-logging
+    driver: json-file
+    options:
+        max-size: "10m"
+        max-file: "3"
+
 services:
     # 인증용 임시 저장소 (Redis)
     redis:
         image: redis:alpine
         container_name: seoganpyo-redis
-        restart: always
+        restart: unless-stopped
         ports:
             - "6379:6379"
+        logging: *default-logging
         healthcheck:
             test: ["CMD", "redis-cli", "ping"]
             interval: 10s
             timeout: 5s
             retries: 5
 
-    # PaddleOCR 마이크로서비스 (이미지 → 텍스트 블록)
+    # Mistral Pixtral OCR 마이크로서비스 (이미지 → 강의명 추출)
     ocr-service:
         build:
             context: ./ocr-service
         container_name: seoganpyo-ocr
-        restart: always
+        restart: unless-stopped
         ports:
             - "8001:8000"
         environment:
             - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+        logging: *default-logging
+        deploy:
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 256M
         healthcheck:
             test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
             interval: 10s
             timeout: 5s
             retries: 5
-            start_period: 15s
+            start_period: 30s
 
     # FastAPI 백엔드
     backend:
@@ -35,17 +52,23 @@ services:
             context: .
             dockerfile: Dockerfile
         container_name: seoganpyo-api
-        restart: always
+        restart: unless-stopped
         ports:
             - "8080:8000"
         volumes:
             - ./data:/app/data
             - ./static:/app/static
-            # admin 챗 운영 어시스턴트가 docker ps/stats를 호출 가능하도록 호스트 소켓 마운트.
-            # ⚠️ 단일 호스트 시연 환경 전용 — 컨테이너에서 호스트 docker 제어 가능.
-            - /var/run/docker.sock:/var/run/docker.sock
+            # ⚠️ docker.sock 마운트는 docker-compose.dev.yml 에서만 (보안 격리).
+            # admin chat의 docker 도구가 prod에서 필요하면 socat proxy 등 안전한 방식으로 도입할 것.
         env_file:
             - .env
+        logging: *default-logging
+        deploy:
+            resources:
+                limits:
+                    memory: 2G
+                reservations:
+                    memory: 512M
         environment:
             - REDIS_URL=redis://redis:6379/0
             - OCR_SERVICE_URL=http://ocr-service:8000
@@ -53,6 +76,11 @@ services:
             # 디폴트: 같은 호스트에 make up-obs로 띄운 prometheus (docker network).
             # 외부 모니터링 서버 사용 시 .env에 PROMETHEUS_URL=http://<IP>:9090 설정.
             - PROMETHEUS_URL=${PROMETHEUS_URL:-http://prometheus:9090}
+            # DefectDojo 보안 대시보드 — 관리자 페이지의 보안 모니터링이 호출.
+            # 토큰은 .env 또는 Jenkins Credentials에서 주입 (절대 하드코딩 금지).
+            - DEFECTDOJO_URL=${DEFECTDOJO_URL:-http://163.239.77.65:8888}
+            - DEFECTDOJO_TOKEN=${DEFECTDOJO_TOKEN:-}
+            - DEFECTDOJO_ENGAGEMENT=${DEFECTDOJO_ENGAGEMENT:-1}
         command:
             [
                 "uvicorn",
@@ -84,9 +112,16 @@ services:
                 - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
                 - NEXT_PUBLIC_GRAFANA_URL=${NEXT_PUBLIC_GRAFANA_URL:-http://localhost:3001}
         container_name: seoganpyo-frontend
-        restart: always
+        restart: unless-stopped
         ports:
             - "3000:3000"
+        logging: *default-logging
+        deploy:
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 256M
         depends_on:
             backend:
                 condition: service_healthy

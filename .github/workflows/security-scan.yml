@@ -1,0 +1,156 @@
+name: Security Scan
+
+# Trivy로 의존성/Dockerfile 보안 취약점 스캔.
+# CRITICAL/HIGH 발견 시 이슈 자동 생성. 같은 제목 이슈 있으면 스킵.
+#
+# 트리거:
+# - dev/main에 push될 때
+# - 매주 월요일 (새로운 CVE가 공개될 수 있으므로)
+
+on:
+    push:
+        branches: [dev, main]
+        paths:
+            - "requirements.txt"
+            - "frontend/package.json"
+            - "frontend/pnpm-lock.yaml"
+            - "Dockerfile"
+            - "ocr-service/Dockerfile"
+            - "ocr-service/requirements.txt"
+    schedule:
+        - cron: "0 0 * * 1" # 매주 월요일 09:00 KST
+    workflow_dispatch: # GitHub UI에서 수동 실행 가능
+
+jobs:
+    scan:
+        name: Trivy 스캔 + 이슈 생성
+        runs-on: ubuntu-latest
+        # fork 저장소는 기본적으로 Issues 기능이 꺼져 있어 issues.create 가 실패함.
+        # 보안 이슈는 upstream 한 곳에서만 추적해야 의미 있으므로 fork 에서는 워크플로우 자체를 스킵.
+        if: github.repository == 'gibunijjaejo/Opensource_Project'
+        permissions:
+            issues: write
+            contents: read
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Trivy 파일시스템 스캔 (의존성)
+              uses: aquasecurity/trivy-action@master
+              with:
+                  scan-type: "fs"
+                  scan-ref: "."
+                  format: "json"
+                  output: "trivy-fs.json"
+                  severity: "CRITICAL,HIGH"
+                  exit-code: "0" # 발견돼도 워크플로우 실패 안 시킴 (이슈로 트래킹)
+
+            - name: Trivy 설정 스캔 (Dockerfile)
+              uses: aquasecurity/trivy-action@master
+              with:
+                  scan-type: "config"
+                  scan-ref: "."
+                  format: "json"
+                  output: "trivy-config.json"
+                  severity: "CRITICAL,HIGH"
+                  exit-code: "0"
+
+            - name: 결과 집계 + 이슈 생성
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const fs = require('fs');
+
+                      const fsResult = JSON.parse(fs.readFileSync('trivy-fs.json', 'utf8'));
+                      const configResult = JSON.parse(fs.readFileSync('trivy-config.json', 'utf8'));
+
+                      const vulns = [];
+                      for (const r of (fsResult.Results || [])) {
+                          for (const v of (r.Vulnerabilities || [])) {
+                              vulns.push({
+                                  type: 'dependency',
+                                  target: r.Target,
+                                  pkg: v.PkgName,
+                                  version: v.InstalledVersion,
+                                  fixedVersion: v.FixedVersion || '없음',
+                                  severity: v.Severity,
+                                  id: v.VulnerabilityID,
+                                  title: v.Title,
+                              });
+                          }
+                      }
+                      for (const r of (configResult.Results || [])) {
+                          for (const m of (r.Misconfigurations || [])) {
+                              if (m.Severity === 'CRITICAL' || m.Severity === 'HIGH') {
+                                  vulns.push({
+                                      type: 'config',
+                                      target: r.Target,
+                                      pkg: m.ID,
+                                      version: '-',
+                                      fixedVersion: m.Resolution || '확인 필요',
+                                      severity: m.Severity,
+                                      id: m.ID,
+                                      title: m.Title,
+                                  });
+                              }
+                          }
+                      }
+
+                      if (vulns.length === 0) {
+                          core.info('취약점 없음 — 이슈 생성 스킵');
+                          return;
+                      }
+
+                      const critical = vulns.filter(v => v.severity === 'CRITICAL').length;
+                      const high = vulns.filter(v => v.severity === 'HIGH').length;
+                      const today = new Date().toISOString().split('T')[0];
+                      const title = `🔒 보안 취약점 ${critical} CRITICAL / ${high} HIGH (${today})`;
+
+                      // 같은 날짜 + 같은 카운트 이슈 있으면 스킵 (중복 방지)
+                      const { data: existing } = await github.rest.issues.listForRepo({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          state: 'open',
+                          labels: 'security',
+                      });
+                      if (existing.find(i => i.title === title)) {
+                          core.info('동일 제목 이슈 이미 존재 — 스킵');
+                          return;
+                      }
+
+                      const lines = [
+                          `## 요약`,
+                          `- **CRITICAL:** ${critical}건`,
+                          `- **HIGH:** ${high}건`,
+                          `- **스캔 일시:** ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`,
+                          ``,
+                          `## 발견된 취약점`,
+                          ``,
+                          `| 심각도 | 종류 | 위치 | 패키지 | 현재 | 수정 버전 | CVE/규칙 |`,
+                          `|--------|------|------|--------|------|-----------|----------|`,
+                      ];
+                      for (const v of vulns.slice(0, 50)) {
+                          lines.push(`| ${v.severity} | ${v.type} | \`${v.target}\` | \`${v.pkg}\` | \`${v.version}\` | \`${v.fixedVersion}\` | ${v.id} |`);
+                      }
+                      if (vulns.length > 50) {
+                          lines.push(``, `_... 외 ${vulns.length - 50}건 더 (워크플로우 로그 참조)_`);
+                      }
+                      lines.push(``, `---`, `자동 생성된 이슈입니다. \`requirements.txt\` / \`package.json\` 업데이트 후 재스캔하세요.`);
+
+                      await github.rest.issues.create({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          title,
+                          body: lines.join('\n'),
+                          labels: ['security', critical > 0 ? 'critical' : 'high', 'automated'],
+                      });
+                      core.info(`이슈 생성됨 (총 ${vulns.length}건)`);
+
+            - name: 스캔 결과 아티팩트 업로드
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: trivy-results
+                  path: |
+                      trivy-fs.json
+                      trivy-config.json
+                  retention-days: 30

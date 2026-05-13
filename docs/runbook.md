@@ -12,7 +12,7 @@
 | seoganpyo-frontend | 3000 | Next.js 프론트엔드 |
 | seoganpyo-api | 8080 | FastAPI 백엔드 |
 | seoganpyo-redis | 6379 | 인증 OTP 임시 저장 (3분 TTL) |
-| seoganpyo-ocr | 8001 | PaddleOCR 시간표 인식 |
+| seoganpyo-ocr | 8001 | Mistral Pixtral 시간표 OCR 호출 마이크로서비스 |
 | PostgreSQL (외부) | 8000 | 163.239.77.77 / DB: seoganpyo |
 
 **CI/CD 흐름:**
@@ -145,8 +145,8 @@ docker compose exec -T seoganpyo-redis redis-cli ping  # PONG 응답 확인
 ```bash
 docker compose logs seoganpyo-ocr --tail=50
 docker compose restart seoganpyo-ocr
-# OCR은 시작에 30~60초 소요 (PaddleOCR 모델 로딩)
-sleep 60 && curl -s http://localhost:8001/health
+# OCR 서비스는 Mistral API 호출 래퍼라 시작 즉시 준비됨 (모델 로딩 없음)
+curl -s http://localhost:8001/health
 ```
 
 ---

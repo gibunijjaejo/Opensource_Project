@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation"
 import { Loader2, RefreshCw, Sparkles, CheckCircle, XCircle, AlertCircle, MinusCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { isMajorCourse } from "@/lib/constants/course-data"
+
+type Division = "major" | "liberal"
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
@@ -86,6 +89,7 @@ export default function AdminLecturesPage() {
   const [summaryingId, setSummaryingId] = useState<number | null>(null)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("전체")
+  const [division, setDivision] = useState<Division>("major")
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -118,14 +122,15 @@ export default function AdminLecturesPage() {
   }
 
   const runSummarizeAll = async () => {
-    setJob({ type: "running", label: `${year}-${semester}학기 강의계획서 요약 생성 중...` })
+    const divisionLabel = division === "major" ? "전공" : "교양"
+    setJob({ type: "running", label: `${year}-${semester}학기 ${divisionLabel} 강의계획서 요약 생성 중...` })
     setLogs([])
     setProgress(null)
     try {
       const res = await fetch(`${BASE_URL}/admin/lectures/summarize-all/stream`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ year, semester }),
+        body: JSON.stringify({ year, semester, division }),
       })
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`)
       const reader = res.body!.getReader()
@@ -239,6 +244,9 @@ export default function AdminLecturesPage() {
   const pdfCount = lectures.filter((l) => l.has_pdf).length
 
   const filtered = lectures.filter((l) => {
+    const isMajor = isMajorCourse(l.course_code)
+    if (division === "major" && !isMajor) return false
+    if (division === "liberal" && isMajor) return false
     const matchSearch =
       search === "" ||
       l.course_code.toLowerCase().includes(search.toLowerCase()) ||
@@ -280,7 +288,7 @@ export default function AdminLecturesPage() {
             style={{ backgroundColor: "#B0232A" }}
           >
             {job.type === "running" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-            전체 요약 생성
+            {division === "major" ? "전공" : "교양"} 요약 생성
           </Button>
         </div>
       </div>
@@ -322,6 +330,25 @@ export default function AdminLecturesPage() {
               </option>
             ))}
           </select>
+          <div className="inline-flex rounded-md border border-border overflow-hidden flex-shrink-0">
+            {([
+              { value: "major", label: "전공" },
+              { value: "liberal", label: "교양" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setDivision(opt.value)}
+                className={`px-3 h-8 text-xs font-medium transition-colors ${
+                  division === opt.value
+                    ? "text-white"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+                style={division === opt.value ? { backgroundColor: "#B0232A" } : {}}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}

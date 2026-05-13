@@ -324,7 +324,7 @@ def _classify_gemini_error(resp: httpx.Response) -> AIServiceError:
             message=f"Gemini가 요청을 거절했습니다: {api_message}",
             suggestion=(
                 ".env의 GEMINI_MODEL이 유효한 모델명인지 확인해주세요 "
-                "(예: gemini-2.5-flash, gemini-2.0-flash, gemini-2.0-flash-lite)."
+                "(예: gemini-2.5-flash, gemini-2.5-flash, gemini-2.5-flash-lite)."
             ),
             http_status=400,
         )
@@ -350,7 +350,7 @@ def _classify_gemini_error(resp: httpx.Response) -> AIServiceError:
             message=f"Gemini가 모델을 찾지 못했습니다: {api_message}",
             suggestion=(
                 ".env의 GEMINI_MODEL을 확인해주세요. "
-                "추천: gemini-2.5-flash 또는 gemini-2.0-flash-lite."
+                "추천: gemini-2.5-flash 또는 gemini-2.5-flash-lite."
             ),
             http_status=404,
         )
@@ -364,7 +364,7 @@ def _classify_gemini_error(resp: httpx.Response) -> AIServiceError:
             sub = "일일 한도 도달"
             sugg = (
                 "오늘은 더 이상 요청할 수 없어요. 한국 시간 오후 4~5시(태평양 자정) 이후 리셋됩니다. "
-                "지금 바로 쓰고 싶다면 .env에서 GEMINI_MODEL=gemini-2.0-flash-lite 또는 gemini-2.5-flash로 바꿔보세요."
+                "지금 바로 쓰고 싶다면 .env에서 GEMINI_MODEL=gemini-2.5-flash-lite 또는 gemini-2.5-flash로 바꿔보세요."
             )
         elif is_minute:
             sub = "분당 한도 도달"
@@ -373,7 +373,7 @@ def _classify_gemini_error(resp: httpx.Response) -> AIServiceError:
             sub = "사용량 한도 도달"
             sugg = (
                 "1~2분 기다려보고, 그래도 안 되면 일일 한도일 가능성이 높아요. "
-                ".env의 GEMINI_MODEL을 gemini-2.0-flash-lite 또는 gemini-2.5-flash로 바꿔보세요. "
+                ".env의 GEMINI_MODEL을 gemini-2.5-flash-lite 또는 gemini-2.5-flash로 바꿔보세요. "
                 "또는 Google AI Studio(aistudio.google.com)에서 결제 수단을 등록하면 한도가 풀립니다(과금 없이도)."
             )
         return AIServiceError(
