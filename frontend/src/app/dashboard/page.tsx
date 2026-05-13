@@ -12,6 +12,7 @@ import { TimetableSlotPanel } from "@/components/features/timetable-slot-panel"
 import type { Course } from "@/lib/constants/course-data"
 import { coursesApi, cartApi, usersApi, historyApi, timetablesApi, type SlotChar, type Timetable } from "@/lib/api"
 import { getCurrentSemester } from "@/lib/utils"
+import { totalCreditsFor } from "@/lib/credit-utils"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import type { Course as ApiCourse, CartItem } from "@/types"
 
@@ -315,7 +316,7 @@ export default function DashboardPage() {
                 <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
               </div>
               <p className="text-sm font-medium text-foreground">
-                {histories.reduce((sum, h) => sum + (h.course?.credits ?? 0), 0)}학점 이수
+                {totalCreditsFor(histories)}학점 이수
               </p>
               <p className="mt-1 text-xs text-muted-foreground">졸업 요건 확인</p>
             </Link>
