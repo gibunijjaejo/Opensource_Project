@@ -26,6 +26,9 @@ ENV NODE_ENV=production
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+# ⚠️ Next.js standalone output 은 public/ 을 자동 복사하지 않음 — 수동 COPY 필수.
+# (랜딩 페이지의 /landing/laptop_phone.png 등 정적 에셋이 404 나는 원인이었음)
+COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 ENV PORT=3000
