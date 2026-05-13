@@ -276,6 +276,11 @@ pipeline {
 
                     docker compose stop backend frontend ocr-service redis || true
                     docker compose rm -f backend frontend ocr-service redis || true
+                    # 이름 기반 강제 정리 — compose 가 트래킹 잃은 orphan 컨테이너 방지.
+                    # 빌드 #264 (v2.1.0) 에서 seoganpyo-frontend 가 compose 프로젝트 밖에 남아있어
+                    # up 시 "container name already in use" 충돌로 실패. 같은 사고 재발 차단용.
+                    # 이미 위에서 rm 된 경우엔 no-op (|| true).
+                    docker rm -f seoganpyo-api seoganpyo-frontend seoganpyo-ocr seoganpyo-redis 2>/dev/null || true
                     docker compose -f docker-compose.yml -f docker-compose.observability.app.yml \
                         up --build -d backend frontend ocr-service redis promtail
                 '''
