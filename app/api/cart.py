@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from app.database import get_db
 from app.dependencies import get_current_student_id
@@ -14,7 +14,12 @@ router = APIRouter(prefix="/api/v1", tags=["Cart & History"])
 
 @router.get("/users/{student_id}/cart", response_model=List[CartResponse])
 def get_cart(student_id: int, db: Session = Depends(get_db)):
-    return db.query(Cart).filter(Cart.student_id == student_id).all()
+    return (
+        db.query(Cart)
+        .options(joinedload(Cart.course).joinedload(Course.professor))
+        .filter(Cart.student_id == student_id)
+        .all()
+    )
 
 
 @router.post("/users/{student_id}/cart", response_model=CartResponse, status_code=201)
@@ -84,7 +89,12 @@ def get_my_cart(
     student_id: int = Depends(get_current_student_id),
     db: Session = Depends(get_db),
 ):
-    return db.query(Cart).filter(Cart.student_id == student_id).all()
+    return (
+        db.query(Cart)
+        .options(joinedload(Cart.course).joinedload(Course.professor))
+        .filter(Cart.student_id == student_id)
+        .all()
+    )
 
 
 @router.post("/cart", response_model=CartResponse, status_code=201)

@@ -2,32 +2,55 @@
 
 import { useState, useRef } from "react"
 import Link from "next/link"
-import { Search, Plus, Check, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import { Search, Plus, Heart, X, ExternalLink, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { type Course, isMajorCourse } from "@/lib/constants/course-data"
+import { type SlotChar, SLOT_SHORT_LABELS } from "@/lib/api"
+
+const SLOTS: SlotChar[] = ["A", "B", "C", "D"]
 
 interface BrowseCoursesProps {
-  courses: Course[]
+  majorCourses: Course[]
+  liberalCourses: Course[]
+  /** cart(관심 과목)에 담긴 강의 id 집합 — 하트 색상에 사용 */
   wishlistIds: Set<string>
-  onAdd: (id: string) => void
-  isLoadingAll?: boolean
+  /** 각 강의가 들어있는 슬롯 목록 — 슬롯 버튼 disable/하이라이트 용 */
+  slotMemberships?: Record<string, SlotChar[]>
+  /** 하트 클릭 — cart 토글 */
+  onToggleWishlist: (id: string) => void
+  /** 슬롯 선택 클릭 — 시간표에 추가 */
+  onAddToSlot: (id: string, slot: SlotChar) => void
+  /** 교양 데이터가 아직 안 받아졌으면 부모가 fetch 하도록 알림 */
+  onLiberalRequested?: () => void
+  /** 현재 로딩 중인 division — UX 표시용 */
+  loadingDivision?: "major" | "liberal" | null
 }
 
 type Division = "major" | "liberal"
 
-export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = false }: BrowseCoursesProps) {
+export function BrowseCourses({
+  majorCourses,
+  liberalCourses,
+  wishlistIds,
+  slotMemberships,
+  onToggleWishlist,
+  onAddToSlot,
+  onLiberalRequested,
+  loadingDivision,
+}: BrowseCoursesProps) {
   const [query, setQuery] = useState("")
   const [confirmedQuery, setConfirmedQuery] = useState("")
   const [division, setDivision] = useState<Division>("major")
   const [page, setPage] = useState(1)
+  const [expandedSlotRow, setExpandedSlotRow] = useState<string | null>(null)
   const PAGE_SIZE = 10
   const tableRef = useRef<HTMLDivElement>(null)
 
-  const filtered = courses.filter((c) => {
-    const isMajor = isMajorCourse(c.code)
-    if (division === "major" && !isMajor) return false
-    if (division === "liberal" && isMajor) return false
+  const sourceCourses = division === "major" ? majorCourses : liberalCourses
+  const isLoadingThis = loadingDivision === division && sourceCourses.length === 0
+
+  const filtered = sourceCourses.filter((c) => {
     const q = confirmedQuery.toLowerCase()
     if (!q) return true
     return (
@@ -41,6 +64,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
     setDivision(d)
     setPage(1)
     tableRef.current?.scrollTo({ top: 0 })
+    if (d === "liberal") onLiberalRequested?.()
   }
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
@@ -58,8 +82,8 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
         <div>
           <h2 className="text-base font-semibold text-foreground">26학년도 1학기 과목검색</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {filtered.length}개 / {courses.length}개 과목
-            {isLoadingAll && <span className="ml-1.5 text-muted-foreground/50">전체 로딩 중...</span>}
+            {filtered.length}개 / {sourceCourses.length}개 과목
+            {isLoadingThis && <span className="ml-1.5 text-muted-foreground/50">로딩 중...</span>}
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto items-center">
@@ -103,7 +127,7 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
         </div>
       </div>
 
-      <div ref={tableRef} className="overflow-hidden rounded-md border border-border">
+      <div ref={tableRef} className="overflow-visible rounded-md border border-border">
         <table className="w-full text-sm table-fixed">
           <thead>
             <tr className="border-b border-border bg-muted/40">
@@ -173,23 +197,79 @@ export function BrowseCourses({ courses, wishlistIds, onAdd, isLoadingAll = fals
                     </td>
                     <td className="px-4 py-0">
                       <div className="flex items-center justify-end gap-1.5">
-                        {inWishlist ? (
-                          <span className="flex items-center gap-1 text-xs font-medium whitespace-nowrap" style={{ color: "#B0232A" }}>
-                            <Check className="h-3 w-3" />
-                            추가됨
-                          </span>
-                        ) : (
+                        {/* 하트 — cart(관심 과목) 토글 */}
+                        <button
+                          onClick={() => onToggleWishlist(course.id)}
+                          className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent transition-colors"
+                          title={inWishlist ? "관심 과목 해제" : "관심 과목 추가"}
+                          aria-label={inWishlist ? "관심 해제" : "관심 추가"}
+                        >
+                          <Heart
+                            className="h-3.5 w-3.5"
+                            fill={inWishlist ? "#B0232A" : "transparent"}
+                            stroke={inWishlist ? "#B0232A" : "currentColor"}
+                          />
+                        </button>
+
+                        {/* 슬롯 추가 — 추가 버튼 클릭 시 absolute dropdown 으로 슬롯 목록 펼침.
+                            테이블 td 폭이 좁아 inline 펼침이 잘렸던 문제 해결을 위해 absolute 사용. */}
+                        <div className="relative">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => onAdd(course.id)}
+                            onClick={() =>
+                              setExpandedSlotRow(expandedSlotRow === course.id ? null : course.id)
+                            }
                             className="h-6 px-2 text-xs gap-1 hover:bg-accent whitespace-nowrap"
                             style={{ color: "#B0232A", borderColor: "#B0232A" } as React.CSSProperties}
                           >
                             <Plus className="h-3 w-3" />
                             추가
                           </Button>
-                        )}
+
+                          {expandedSlotRow === course.id && (
+                            <div
+                              className="absolute right-0 top-full mt-1 z-20 flex flex-col gap-0.5 rounded-md border border-border bg-card p-1 shadow-lg min-w-[120px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {SLOTS.map((s) => {
+                                const inSlot = slotMemberships?.[course.id]?.includes(s) ?? false
+                                return (
+                                  <button
+                                    key={s}
+                                    onClick={() => {
+                                      if (inSlot) return
+                                      onAddToSlot(course.id, s)
+                                      setExpandedSlotRow(null)
+                                    }}
+                                    disabled={inSlot}
+                                    className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                                      inSlot
+                                        ? "opacity-40 cursor-not-allowed bg-muted text-muted-foreground"
+                                        : "hover:bg-muted"
+                                    }`}
+                                    style={inSlot ? {} : { color: "#B0232A" }}
+                                    title={inSlot ? "이미 담김" : `${SLOT_SHORT_LABELS[s]} 에 추가`}
+                                  >
+                                    <span>{SLOT_SHORT_LABELS[s]}</span>
+                                    {inSlot ? (
+                                      <span className="text-[9px]">담김</span>
+                                    ) : (
+                                      <Plus className="h-3 w-3 opacity-60" />
+                                    )}
+                                  </button>
+                                )
+                              })}
+                              <button
+                                onClick={() => setExpandedSlotRow(null)}
+                                className="mt-0.5 flex items-center justify-center gap-1 rounded border-t border-border px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent"
+                              >
+                                <X className="h-3 w-3" />
+                                닫기
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

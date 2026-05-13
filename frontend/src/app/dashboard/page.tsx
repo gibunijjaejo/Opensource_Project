@@ -1,17 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { BookOpen, BookMarked, User, Upload, ChevronRight, Settings, GraduationCap, LogOut, Users, Sparkles } from "lucide-react"
 import { WishlistCard } from "@/components/features/wishlist-card"
 import { BrowseCourses } from "@/components/features/browse-courses"
-import { TimetableGrid } from "@/components/features/timetable-grid"
+import { TimetableSlotPanel } from "@/components/features/timetable-slot-panel"
+// NOTE: TimetableGrid 는 이제 TimetableSlotPanel 내부에서 사용됨. dashboard 에선 직접 사용 X.
 import type { Course } from "@/lib/constants/course-data"
-import { coursesApi, cartApi, usersApi, historyApi } from "@/lib/api"
+import { coursesApi, cartApi, usersApi, historyApi, timetablesApi, type SlotChar, type Timetable } from "@/lib/api"
 import { getCurrentSemester } from "@/lib/utils"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
-import type { Course as ApiCourse, CartItem, HistoryItem } from "@/types"
+import type { Course as ApiCourse, CartItem } from "@/types"
 
 // API 응답 → 컴포넌트가 기대하는 Course 타입으로 변환
 function mapApiCourse(c: ApiCourse): Course {
@@ -37,74 +39,132 @@ function mapApiCourse(c: ApiCourse): Course {
   }
 }
 
+const TARGET_YEAR = 2026
+const TARGET_SEMESTER = 1
+
+// Query key factory — 다른 페이지에서도 동일 키로 캐시 공유 가능.
+const QK = {
+  courses: (year: number, semester: number, division: "major" | "liberal") =>
+    ["courses", { year, semester, division }] as const,
+  cart: ["cart"] as const,
+  me: ["users", "me"] as const,
+  myHistories: ["histories", "me"] as const,
+  timetables: ["timetables"] as const,
+}
+
+const fetchCourses = (division: "major" | "liberal") =>
+  coursesApi
+    .list({ year: TARGET_YEAR, semester: TARGET_SEMESTER, division })
+    .then((data) => data.map(mapApiCourse))
+
 export default function DashboardPage() {
   const router = useRouter()
-  const [courses, setCourses] = useState<Course[]>([])
-  const [cartItems, setCartItems] = useState<CartItem[]>([])
-  const [userName, setUserName] = useState<string>("")
-  const [histories, setHistories] = useState<HistoryItem[]>([])
-  const [isLoadingAll, setIsLoadingAll] = useState(false)
-  const [userInterests, setUserInterests] = useState<string[]>([])
+  const queryClient = useQueryClient()
+  const [liberalRequested, setLiberalRequested] = useState(false)
 
+  // 인증 가드 — 토큰 없으면 로그인 페이지로
   useEffect(() => {
     const token = localStorage.getItem("access_token")
-    if (!token) {
-      router.replace("/login")
-      return
-    }
-
-    // 첫 페이지(10개) 즉시 표시
-    coursesApi.list({ year: 2026, semester: 1, limit: 10 })
-      .then((data) => setCourses(data.map(mapApiCourse)))
-      .catch(() => {})
-
-    // 전체 목록 백그라운드 로딩
-    setIsLoadingAll(true)
-    coursesApi.list({ year: 2026, semester: 1 })
-      .then((data) => setCourses(data.map(mapApiCourse)))
-      .catch(() => {})
-      .finally(() => setIsLoadingAll(false))
-
-    usersApi.me()
-      .then((u) => {
-        setUserName(u.name)
-        const interests = u.interests ? u.interests.split(",").filter(Boolean) : []
-        setUserInterests(interests)
-      })
-      .catch(() => {})
-    cartApi.get()
-      .then(setCartItems)
-      .catch(() => {})
-    historyApi.getMyHistories()
-      .then(setHistories)
-      .catch(() => {})
+    if (!token) router.replace("/login")
   }, [router])
 
-  const wishlistIds = new Set(
-    cartItems.map((item) => String(item.course_id))
+  // React Query 가 mount/unmount 무관하게 캐시를 유지하므로 페이지 이동 후 돌아와도 즉시 hit.
+  const majorQuery = useQuery({
+    queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "major"),
+    queryFn: () => fetchCourses("major"),
+  })
+  const liberalQuery = useQuery({
+    queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "liberal"),
+    queryFn: () => fetchCourses("liberal"),
+    // 사용자가 교양 토글을 누른 적이 있을 때만 활성화. prefetch 가 미리 캐시를 채워놓으므로 hit.
+    enabled: liberalRequested,
+  })
+  const meQuery = useQuery({ queryKey: QK.me, queryFn: () => usersApi.me() })
+  const cartQuery = useQuery({ queryKey: QK.cart, queryFn: () => cartApi.get() })
+  const historiesQuery = useQuery({
+    queryKey: QK.myHistories,
+    queryFn: () => historyApi.getMyHistories(),
+  })
+  const timetablesQuery = useQuery({
+    queryKey: QK.timetables,
+    queryFn: () => timetablesApi.list(),
+  })
+
+  // 전공 fetch 끝나면 교양도 백그라운드 prefetch (캐시에 채워두기)
+  useEffect(() => {
+    if (majorQuery.isSuccess) {
+      queryClient.prefetchQuery({
+        queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "liberal"),
+        queryFn: () => fetchCourses("liberal"),
+      })
+    }
+  }, [majorQuery.isSuccess, queryClient])
+
+  const majorCourses = majorQuery.data ?? []
+  const liberalCourses = liberalQuery.data ?? []
+  const loadingDivision: "major" | "liberal" | null = majorQuery.isPending
+    ? "major"
+    : liberalCourses.length === 0 &&
+      (liberalQuery.isFetching ||
+        queryClient.isFetching({
+          queryKey: QK.courses(TARGET_YEAR, TARGET_SEMESTER, "liberal"),
+        }) > 0)
+    ? "liberal"
+    : null
+
+  const fetchLiberalIfNeeded = useCallback(() => {
+    setLiberalRequested(true)
+  }, [])
+
+  const userName = meQuery.data?.name ?? ""
+  const userInterests = useMemo(
+    () =>
+      meQuery.data?.interests
+        ? meQuery.data.interests.split(",").filter(Boolean)
+        : [],
+    [meQuery.data?.interests],
   )
-  // cartId 역조회용 맵 (course_id → cartItemId)
-  const cartIdMap = new Map(
-    cartItems.map((item) => [String(item.course_id), item.id])
+  const cartItems = cartQuery.data ?? []
+  const histories = historiesQuery.data ?? []
+  const timetables = timetablesQuery.data ?? []
+
+  const wishlistIds = useMemo(
+    () => new Set(cartItems.map((item) => String(item.course_id))),
+    [cartItems],
+  )
+  const cartIdMap = useMemo(
+    () => new Map(cartItems.map((item) => [String(item.course_id), item.id])),
+    [cartItems],
   )
 
-  // 카드 표시용 (기존 정렬 유지)
-  const wishlistedCourses = courses.filter((c) => wishlistIds.has(c.id))
+  // courseId → 들어있는 슬롯 목록. BrowseCourses 슬롯 버튼 disable 표시용.
+  const slotMemberships = useMemo<Record<string, SlotChar[]>>(() => {
+    const m: Record<string, SlotChar[]> = {}
+    for (const t of timetables) {
+      for (const c of t.courses) {
+        const key = String(c.course_id)
+        if (!m[key]) m[key] = []
+        m[key].push(t.slot)
+      }
+    }
+    return m
+  }, [timetables])
 
-  // 시간표용: cart 추가 순서(id 오름차순)대로 정렬해서 같은 시간대면 최근 추가가 위로 렌더되도록.
-  const courseById = new Map(courses.map((c) => [c.id, c]))
-  const timetableCourses = cartItems
-    .slice()
-    .sort((a, b) => a.id - b.id)
-    .map((item) => courseById.get(String(item.course_id)))
-    .filter((c): c is Course => !!c)
+  const wishlistedCourses = useMemo<Course[]>(
+    () =>
+      cartItems
+        .filter((item) => item.course)
+        .map((item) => mapApiCourse(item.course!)),
+    [cartItems],
+  )
 
   const addToWishlist = async (id: string) => {
-    const token = localStorage.getItem("access_token")
-    if (!token) return
+    if (!localStorage.getItem("access_token")) return
     try {
       const newItem = await cartApi.add(Number(id))
-      setCartItems((prev) => [...prev, newItem])
+      queryClient.setQueryData<CartItem[]>(QK.cart, (prev) =>
+        prev ? [...prev, newItem] : [newItem],
+      )
     } catch {/* 이미 추가됨 등 */}
   }
 
@@ -113,13 +173,45 @@ export default function DashboardPage() {
     if (cartId == null) return
     try {
       await cartApi.remove(cartId)
-      setCartItems((prev) => prev.filter((item) => item.id !== cartId))
+      queryClient.setQueryData<CartItem[]>(QK.cart, (prev) =>
+        prev?.filter((item) => item.id !== cartId) ?? [],
+      )
     } catch {}
+  }
+
+  // 검색 카드의 하트 버튼 — cart 토글
+  const toggleWishlist = async (id: string) => {
+    if (wishlistIds.has(id)) {
+      await removeFromWishlist(id)
+    } else {
+      await addToWishlist(id)
+    }
+  }
+
+  // 검색 카드의 [A][B][C][D] 슬롯 버튼 — 해당 슬롯에 즉시 추가
+  const addToSlot = async (id: string, slot: SlotChar) => {
+    if (!localStorage.getItem("access_token")) {
+      alert("로그인이 필요합니다.")
+      return
+    }
+    try {
+      const updated = await timetablesApi.addCourse(slot, Number(id))
+      queryClient.setQueryData<Timetable[]>(QK.timetables, (prev) =>
+        prev?.map((t) => (t.slot === slot ? updated : t)) ?? [updated],
+      )
+    } catch (e) {
+      // backend 미기동 / 중복 등 — 사용자에게 피드백
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error(`addToSlot(${slot}, ${id}) 실패:`, e)
+      alert(`슬롯 ${slot} 에 추가 실패\n${msg}`)
+    }
   }
 
   const handleLogout = () => {
     localStorage.removeItem("access_token")
     document.cookie = "access_token=; path=/; max-age=0"
+    // 캐시 비움 — 다른 사용자가 로그인했을 때 이전 사용자 데이터 누수 방지
+    queryClient.clear()
     router.replace("/login")
   }
 
@@ -127,7 +219,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="flex h-14 items-center justify-between">
             <div className="flex items-center gap-2.5">
               <BookOpen className="h-5 w-5 flex-shrink-0" style={{ color: "#B0232A" }} />
@@ -163,9 +255,11 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="mx-auto max-w-3xl px-4 sm:px-6 py-8">
-        <div className="flex flex-col gap-10">
+      {/* Main Content — 중앙 메인 + 우측 sticky 사이드바 (관심 과목) */}
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 py-8">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* 중앙 메인 컬럼 */}
+          <div className="flex flex-col gap-10">
 
           {/* Intro */}
           <div className="border-l-2 pl-4" style={{ borderColor: "#B0232A" }}>
@@ -241,35 +335,28 @@ export default function DashboardPage() {
             </Link>
           </div>
 
-          {/* Portfolio (AI 평가) Section */}
-          <Link
-            href="/portfolio"
-            className="group rounded-lg border border-border bg-card p-5 hover:shadow-sm transition-shadow flex items-center gap-4"
-          >
-            <div
-              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg"
-              style={{ backgroundColor: "rgba(176, 35, 42, 0.1)" }}
-            >
-              <Sparkles className="h-5 w-5" style={{ color: "#B0232A" }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-foreground">내 포트폴리오</h2>
-                <span
-                  className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: "rgba(176, 35, 42, 0.1)", color: "#B0232A" }}
-                >
-                  AI 평가
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                교내·교외활동, 자격증, 수상내역, 프로젝트를 기록하고 AI에게 진로 평가를 받으세요.
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
-          </Link>
+          {/* 내 시간표 — A/B/C/D 4 슬롯 + 고정 + 비교 */}
+          <TimetableSlotPanel
+            timetables={timetables}
+            isLoading={timetablesQuery.isPending}
+            mapApiCourse={mapApiCourse}
+          />
 
-          {/* Community Board Section */}
+          <div className="border-t border-border" />
+
+          {/* Browse Section — 카드별 [하트(cart 토글)] + [추가(A/B/C/D 슬롯 선택)] */}
+          <BrowseCourses
+            majorCourses={majorCourses}
+            liberalCourses={liberalCourses}
+            wishlistIds={wishlistIds}
+            slotMemberships={slotMemberships}
+            onToggleWishlist={toggleWishlist}
+            onAddToSlot={addToSlot}
+            onLiberalRequested={fetchLiberalIfNeeded}
+            loadingDivision={loadingDivision}
+          />
+
+          {/* Community Board Section — 페이지 맨 밑 */}
           <section className="rounded-lg border border-border bg-muted/30 p-6">
             <h2 className="text-sm font-semibold text-foreground mb-1">내 커뮤니티 게시판</h2>
             <p className="text-xs text-muted-foreground mb-4">선택한 분야의 게시판으로 바로 이동할 수 있습니다.</p>
@@ -298,66 +385,74 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+          </div>
 
-          {/* Timetable Preview */}
-          <section>
-            <div className="mb-3">
-              <h2 className="text-base font-semibold text-foreground">내 시간표</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                관심 과목으로 추가하면 아래 시간표에 자동으로 표시됩니다.
-              </p>
-            </div>
-            <TimetableGrid courses={timetableCourses} />
-          </section>
-
-          {/* Wishlist Section */}
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-semibold text-foreground">내 관심 과목</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {wishlistedCourses.length === 0
-                    ? "아직 저장된 과목이 없습니다 - 아래에서 과목을 추가하세요."
-                    : `${wishlistedCourses.length}개 과목 저장됨`}
+          {/* 우측 sticky 사이드바 — 포트폴리오 + 내 관심 과목 (둘 다 같이 sticky) */}
+          <aside className="lg:sticky lg:top-20 lg:self-start flex flex-col gap-4">
+            {/* 포트폴리오 — 사이드바 상단 */}
+            <Link
+              href="/portfolio"
+              className="group rounded-lg border border-border bg-card p-4 hover:shadow-sm transition-shadow flex items-center gap-3"
+            >
+              <div
+                className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
+                style={{ backgroundColor: "rgba(176, 35, 42, 0.1)" }}
+              >
+                <Sparkles className="h-4 w-4" style={{ color: "#B0232A" }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-sm font-semibold text-foreground">내 포트폴리오</h2>
+                  <span
+                    className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                    style={{ backgroundColor: "rgba(176, 35, 42, 0.1)", color: "#B0232A" }}
+                  >
+                    AI 평가
+                  </span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-relaxed">
+                  활동/자격증/수상/프로젝트 기록 → AI 진로 평가
                 </p>
               </div>
-            </div>
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
+            </Link>
 
-            {wishlistedCourses.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border px-6 py-10 text-center">
-                <BookMarked className="mx-auto h-6 w-6 text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">관심 과목 목록이 비어있습니다.</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">
-                  아래 목록에서 과목을 검색하고 <strong>추가</strong> 버튼을 눌러주세요.
-                </p>
+            {/* 관심 과목 — 항상 3개 카드 만한 고정 높이 (스크롤로 더 보기) */}
+            <section className="rounded-lg border border-border bg-card p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <BookMarked className="h-4 w-4" style={{ color: "#B0232A" }} />
+                <h2 className="text-sm font-semibold text-foreground">내 관심 과목</h2>
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  {wishlistedCourses.length}개
+                </span>
               </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {wishlistedCourses.map((course) => (
-                  <WishlistCard
-                    key={course.id}
-                    course={course}
-                    onRemove={removeFromWishlist}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
 
-          <div className="border-t border-border" />
-
-          {/* Browse Section */}
-          <BrowseCourses
-            courses={courses}
-            wishlistIds={wishlistIds}
-            onAdd={addToWishlist}
-            isLoadingAll={isLoadingAll}
-          />
+              {wishlistedCourses.length === 0 ? (
+                <div className="h-[380px] flex flex-col items-center justify-center rounded-md border border-dashed border-border px-3 text-center">
+                  <BookMarked className="h-5 w-5 text-muted-foreground/40 mb-1.5" />
+                  <p className="text-xs text-muted-foreground">관심 과목이 비어있습니다.</p>
+                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                    검색에서 ♡ 버튼으로 추가
+                  </p>
+                </div>
+              ) : (
+                <div className="h-[380px] overflow-y-auto pr-1 flex flex-col gap-2">
+                  {wishlistedCourses.map((course) => (
+                    <WishlistCard
+                      key={course.id}
+                      course={course}
+                      onRemove={removeFromWishlist}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </aside>
         </div>
       </main>
 
       <footer className="mt-12 border-t border-border">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 py-4">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-4">
           <p className="text-xs text-muted-foreground/60 text-center">
             서간표 - {getCurrentSemester().label}
           </p>
