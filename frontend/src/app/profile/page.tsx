@@ -241,13 +241,6 @@ export default function ProfilePage() {
               })}
             </div>
 
-            {profile.interests.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground">
-                  선택됨: {profile.interests.join(", ")}
-                </p>
-              </div>
-            )}
           </section>
 
           {/* 커뮤니티 바로가기 */}

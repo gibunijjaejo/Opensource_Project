@@ -205,7 +205,7 @@ export function TimetableSlotPanel({ timetables, isLoading, mapApiCourse }: Time
 
             {/* 슬롯 안내 */}
             <p className="mt-3 text-[11px] text-muted-foreground/70">
-                💡 시간표의 강의를 누르면 제거 버튼이 나옵니다.
+                ※ 시간표의 강의를 누르면 제거 버튼이 나옵니다.
             </p>
 
             {/* 비교 모달 */}
