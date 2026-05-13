@@ -72,6 +72,10 @@ export default function GraduationPage() {
   // ── 삭제 확인 상태 ─────────────────────────────────────
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
 
+  // ── 전체 초기화 확인 상태 ──────────────────────────────
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetting, setResetting] = useState(false)
+
   // ── 정렬 방향 (기본: 내림차순) ─────────────────────────
   const [sortDesc, setSortDesc] = useState(true)
 
@@ -199,6 +203,21 @@ export default function GraduationPage() {
       console.error(e)
     } finally {
       setModalSaving(false)
+    }
+  }
+
+  // ── 전체 초기화 ───────────────────────────────────────
+  const handleResetAll = async () => {
+    if (resetting) return
+    setResetting(true)
+    try {
+      await historyApi.removeAll()
+      setHistories([])
+      setConfirmReset(false)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -382,6 +401,14 @@ export default function GraduationPage() {
                 >
                   <ArrowUpDown className="h-3 w-3" />
                   {sortDesc ? "최신순" : "오래된순"}
+                </button>
+                <button
+                  onClick={() => setConfirmReset(true)}
+                  disabled={histories.length === 0}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-red-500 hover:bg-red-50 border border-border rounded px-2.5 py-1 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-muted-foreground disabled:hover:bg-transparent"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  초기화
                 </button>
               </div>
             </div>
@@ -704,6 +731,53 @@ export default function GraduationPage() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 전체 초기화 확인 모달 ────────────────────────── */}
+      {confirmReset && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={(e) => e.target === e.currentTarget && !resetting && setConfirmReset(false)}
+        >
+          <div className="w-full max-w-sm rounded-xl border border-border bg-background shadow-xl">
+            <div className="px-5 py-5 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="h-5 w-5 text-red-500" />
+                <h3 className="text-base font-semibold text-foreground">
+                  이수 기록 초기화
+                </h3>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                정말 초기화 하겠습니까?
+                <br />
+                모든 이수 기록이 삭제되어 0학점이 됩니다. 이 작업은 되돌릴 수 없습니다.
+              </p>
+            </div>
+            <div className="px-5 py-4 border-t border-border flex gap-2">
+              <button
+                onClick={() => !resetting && setConfirmReset(false)}
+                disabled={resetting}
+                className="flex-1 h-9 rounded-md border border-border text-sm text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleResetAll}
+                disabled={resetting}
+                className="flex-1 h-9 rounded-md text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {resetting ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    초기화 중
+                  </span>
+                ) : (
+                  "초기화"
+                )}
+              </button>
             </div>
           </div>
         </div>

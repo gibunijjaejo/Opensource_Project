@@ -241,6 +241,9 @@ export const historyApi = {
 
   remove: (historyId: number) =>
     request<void>(`/history/${historyId}`, { method: "DELETE" }),
+
+  removeAll: () =>
+    request<{ message: string; deleted: number }>("/history/me", { method: "DELETE" }),
 }
 
 // ── Syllabus ──────────────────────────────────────────
