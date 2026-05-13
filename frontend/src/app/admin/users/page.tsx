@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Trash2, Ban, CheckCircle, Loader2, ShieldCheck, Pencil, X, KeyRound, Send } from "lucide-react"
+import { Search, Trash2, Ban, CheckCircle, Loader2, ShieldCheck, Pencil, X, KeyRound, Send, UserCheck, UserX } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
@@ -24,6 +24,13 @@ type UserItem = {
   current_semester: number | null
 }
 
+type PendingUserItem = {
+  student_id: number
+  name: string
+  email: string
+  current_semester: number | null
+}
+
 type EditForm = {
   student_id: string
   name: string
@@ -37,6 +44,10 @@ export default function AdminUsersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [actionId, setActionId] = useState<number | null>(null)
+
+  const [pendingUsers, setPendingUsers] = useState<PendingUserItem[]>([])
+  const [pendingLoading, setPendingLoading] = useState(true)
+  const [pendingActionId, setPendingActionId] = useState<number | null>(null)
 
   const [editTarget, setEditTarget] = useState<UserItem | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({ student_id: "", name: "", email: "", current_semester: "" })
@@ -59,6 +70,7 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (!token) { router.replace("/admin/login"); return }
     fetchUsers()
+    fetchPendingUsers()
   }, [])
 
   const fetchUsers = (q?: string) => {
@@ -69,6 +81,45 @@ export default function AdminUsersPage() {
       .then(setUsers)
       .catch(console.error)
       .finally(() => setIsLoading(false))
+  }
+
+  const fetchPendingUsers = () => {
+    setPendingLoading(true)
+    fetch(`${BASE_URL}/admin/users/pending`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => res.json())
+      .then(setPendingUsers)
+      .catch(console.error)
+      .finally(() => setPendingLoading(false))
+  }
+
+  const approveUser = async (student_id: number, name: string) => {
+    if (!confirm(`${name} 의 회원가입을 승인하겠습니까?`)) return
+    setPendingActionId(student_id)
+    const res = await fetch(`${BASE_URL}/admin/users/${student_id}/approve`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(data.detail || "승인에 실패했습니다.")
+    }
+    await Promise.all([fetchPendingUsers(), fetchUsers(search || undefined)])
+    setPendingActionId(null)
+  }
+
+  const rejectUser = async (student_id: number, name: string) => {
+    if (!confirm(`${name} 의 회원가입 신청을 거절하겠습니까? (계정 삭제)`)) return
+    setPendingActionId(student_id)
+    const res = await fetch(`${BASE_URL}/admin/users/${student_id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(data.detail || "거절에 실패했습니다.")
+    }
+    fetchPendingUsers()
+    setPendingActionId(null)
   }
 
   const handleSearch = (e: React.FormEvent) => {
@@ -216,6 +267,80 @@ export default function AdminUsersPage() {
         <h1 className="text-lg font-bold text-foreground">사용자 관리</h1>
         <p className="mt-1 text-sm text-muted-foreground">유저 목록을 조회하고 권한을 관리합니다.</p>
       </div>
+
+      {/* 회원가입 승인 대기 */}
+      <section className="mb-8">
+        <div className="flex items-center gap-2 mb-3">
+          <UserCheck className="h-4 w-4" style={{ color: "#B0232A" }} />
+          <h2 className="text-sm font-semibold text-foreground">회원가입 승인 대기</h2>
+          {!pendingLoading && pendingUsers.length > 0 && (
+            <span
+              className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold text-white"
+              style={{ backgroundColor: "#B0232A" }}
+            >
+              {pendingUsers.length}
+            </span>
+          )}
+        </div>
+        {pendingLoading ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> 로딩 중...
+          </div>
+        ) : pendingUsers.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
+            승인 대기 중인 사용자가 없습니다.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">학번</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">이름</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">이메일</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">학기</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-muted-foreground">처리</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {pendingUsers.map((u) => {
+                  const busy = pendingActionId === u.student_id
+                  return (
+                    <tr key={u.student_id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3 text-muted-foreground">{u.student_id}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">{u.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{u.current_semester ?? "-"}학기</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            className="h-7 px-2.5 text-xs gap-1"
+                            style={{ backgroundColor: "#B0232A" }}
+                            onClick={() => approveUser(u.student_id, u.name)}
+                            disabled={busy}
+                          >
+                            <UserCheck className="h-3 w-3" /> 승인
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2.5 text-xs gap-1 text-red-500 hover:text-red-600"
+                            onClick={() => rejectUser(u.student_id, u.name)}
+                            disabled={busy}
+                          >
+                            <UserX className="h-3 w-3" /> 거절
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <form onSubmit={handleSearch} className="flex gap-2 mb-6 max-w-sm">
         <div className="relative flex-1">
