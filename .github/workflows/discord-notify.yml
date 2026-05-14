@@ -48,10 +48,9 @@ jobs:
                  else "❓" end) + " " + .name')
 
           # Discord embed field value 는 1024자 제한.
-          # 잡이 너무 많으면 잘라낼 안전장치.
-          if [ ${#JOBS_TEXT} -gt 1000 ]; then
-            JOBS_TEXT="$(echo "$JOBS_TEXT" | head -c 950)
-... (이하 생략)"
+          # 잡이 너무 많으면 잘라낼 안전장치. ($'\n' 으로 줄바꿈 안전하게 삽입.)
+          if [ "${#JOBS_TEXT}" -gt 1000 ]; then
+            JOBS_TEXT="${JOBS_TEXT:0:950}"$'\n... (이하 생략)'
           fi
 
           # 빈 결과 방어 — 잡 정보 못 가져오면 placeholder.
@@ -125,6 +124,14 @@ jobs:
               }]
             }')
 
-          curl -sS -X POST "$WEBHOOK" \
+          # Discord 응답을 명시적으로 체크 — 4xx/5xx 도 curl 은 기본적으로 exit 0 이라
+          # 알림이 조용히 실패하는 걸 막기 위해 HTTP 상태 코드로 직접 판정한다.
+          HTTP_CODE=$(curl -sS -o /tmp/discord_resp.txt -w "%{http_code}" -X POST "$WEBHOOK" \
             -H "Content-Type: application/json" \
-            -d "$PAYLOAD"
+            -d "$PAYLOAD")
+          echo "Discord HTTP status: $HTTP_CODE"
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Discord webhook 실패 (HTTP $HTTP_CODE)"
+            cat /tmp/discord_resp.txt
+            exit 1
+          fi
