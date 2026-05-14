@@ -169,7 +169,7 @@ export function BrowseCourses({
                     }`}
                   >
                     <td className="px-4 py-0">
-                      <span className="font-mono text-xs font-medium text-muted-foreground tracking-wide whitespace-nowrap">
+                      <span className="text-xs font-medium text-muted-foreground tracking-wide whitespace-nowrap">
                         {course.code}
                       </span>
                     </td>

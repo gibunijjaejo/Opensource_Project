@@ -16,7 +16,7 @@ export function WishlistCard({ course, onRemove }: WishlistCardProps) {
     <div className="group flex flex-col gap-3 rounded-md border border-border bg-card p-4 transition-shadow hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
-          <span className="text-xs font-mono font-medium text-muted-foreground tracking-wide uppercase">
+          <span className="text-xs font-medium text-muted-foreground tracking-wide uppercase">
             {course.code}
           </span>
           <h3 className="text-sm font-semibold text-foreground leading-snug text-balance">
