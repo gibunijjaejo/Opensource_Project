@@ -10,12 +10,28 @@ import {
   CalendarPlus,
 } from "lucide-react"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
-import { historyApi, coursesApi } from "@/lib/api"
+import { historyApi, coursesApi, usersApi } from "@/lib/api"
 import { isMajorCourse } from "@/lib/constants/course-data"
-import type { HistoryItem, Course } from "@/types"
+import type { HistoryItem, Course, User } from "@/types"
 
 const OCR_PENDING_KEY = "ocrPending"
 const OCR_TIMEOUT_MS = 5 * 60 * 1000
+
+// 학번별 졸업 요건 (전공·총 이수 학점).
+// 현재 모든 학번이 22학번 기준(전공 72 / 총 130)을 사용 — 다른 학번 요건이 확정되는 대로
+// GRAD_REQUIREMENTS 에 학번 → { major, total } 한 줄씩 추가하면 그 학번만 덮어쓰기됨.
+type GradRequirement = { major: number; total: number }
+const DEFAULT_REQUIREMENT: GradRequirement = { major: 72, total: 130 }
+const GRAD_REQUIREMENTS: Record<number, GradRequirement> = {
+  // 22: { major: 72, total: 130 },  // 22학번 — 현재 DEFAULT 와 동일해서 명시 생략
+}
+
+// student_id (예: 20221234) → 학번 두 자리 (22) → 졸업요건.
+function getRequirement(studentId: number | undefined): GradRequirement {
+  if (!studentId) return DEFAULT_REQUIREMENT
+  const yearTwoDigit = Math.floor(studentId / 10000) % 100
+  return GRAD_REQUIREMENTS[yearTwoDigit] ?? DEFAULT_REQUIREMENT
+}
 
 type SemesterGroup = {
   year: number | null
@@ -51,6 +67,7 @@ const chronoKey = (year: number | null, semester: number | null) =>
 export default function GraduationPage() {
   const router = useRouter()
   const [histories, setHistories] = useState<HistoryItem[]>([])
+  const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [ocrPending, setOcrPending] = useState(false)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -89,6 +106,9 @@ export default function GraduationPage() {
     }
 
     const raw = localStorage.getItem(OCR_PENDING_KEY)
+
+    // 학번 기반 졸업요건 룩업용으로 유저 정보도 함께 로드.
+    usersApi.me().then(setUser).catch(() => {})
 
     historyApi
       .getMyHistories()
@@ -254,12 +274,7 @@ export default function GraduationPage() {
   const majorCredits = dedupedHistories
     .filter((h) => isMajorCourse(h.course_code))
     .reduce((sum, h) => sum + creditOf(h), 0)
-  const liberalCredits = dedupedHistories
-    .filter((h) => !isMajorCourse(h.course_code))
-    .reduce((sum, h) => sum + creditOf(h), 0)
-  const totalCredits = majorCredits + liberalCredits
-  const majorCount = dedupedHistories.filter((h) => isMajorCourse(h.course_code)).length
-  const liberalCount = dedupedHistories.length - majorCount
+  const totalCredits = dedupedHistories.reduce((sum, h) => sum + creditOf(h), 0)
 
   const groupMap = histories.reduce((acc: Record<string, SemesterGroup>, h: HistoryItem) => {
     const key = `${h.year ?? "null"}-${h.semester ?? "null"}`
@@ -334,45 +349,60 @@ export default function GraduationPage() {
             </div>
           )}
 
-          {/* Summary Cards */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-border bg-card p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  총 이수 학점
-                </span>
+          {/* Summary Cards — 학번 기반 졸업요건 대비 진행도 */}
+          {(() => {
+            const req = getRequirement(user?.student_id)
+            const majorPct = Math.min(100, Math.round((majorCredits / req.major) * 100))
+            const totalPct = Math.min(100, Math.round((totalCredits / req.total) * 100))
+            return (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-border bg-card p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      이수 전공 학점
+                    </span>
+                    <span className="text-xs text-muted-foreground">{majorPct}%</span>
+                  </div>
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <p className="text-3xl font-bold text-foreground">{majorCredits}</p>
+                    <p className="text-base text-muted-foreground">
+                      <span className="mx-0.5">/</span>
+                      {req.major}
+                      <span className="ml-1 text-sm">학점</span>
+                    </p>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full transition-all"
+                      style={{ width: `${majorPct}%`, backgroundColor: "#B0232A" }}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-card p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      총 이수 학점
+                    </span>
+                    <span className="text-xs text-muted-foreground">{totalPct}%</span>
+                  </div>
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <p className="text-3xl font-bold text-foreground">{totalCredits}</p>
+                    <p className="text-base text-muted-foreground">
+                      <span className="mx-0.5">/</span>
+                      {req.total}
+                      <span className="ml-1 text-sm">학점</span>
+                    </p>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full transition-all"
+                      style={{ width: `${totalPct}%`, backgroundColor: "#B0232A" }}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="flex items-baseline gap-3 flex-wrap">
-                <p className="text-3xl font-bold text-foreground">
-                  {totalCredits}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">학점</span>
-                </p>
-                <p className="text-base text-muted-foreground">
-                  전공 <span className="font-semibold text-foreground">{majorCredits}</span>
-                  <span className="mx-1.5">·</span>
-                  교양 <span className="font-semibold text-foreground">{liberalCredits}</span>
-                </p>
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-card p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  이수 과목 수
-                </span>
-              </div>
-              <div className="flex items-baseline gap-3 flex-wrap">
-                <p className="text-3xl font-bold text-foreground">
-                  {dedupedHistories.length}
-                  <span className="ml-1 text-sm font-normal text-muted-foreground">과목</span>
-                </p>
-                <p className="text-base text-muted-foreground">
-                  전공 <span className="font-semibold text-foreground">{majorCount}</span>
-                  <span className="mx-1.5">·</span>
-                  교양 <span className="font-semibold text-foreground">{liberalCount}</span>
-                </p>
-              </div>
-            </div>
-          </div>
+            )
+          })()}
 
           {/* History List */}
           <section>
