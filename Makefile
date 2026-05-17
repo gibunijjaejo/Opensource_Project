@@ -57,13 +57,13 @@ prod-logs-obs:
 # ── 모니터링 서버 분리 구조 ────────────────────────────
 # 모니터링 서버 (163.239.77.66) — Loki + Prometheus + Grafana + InfluxDB
 obs-server-up:
-	docker compose -f docker-compose.observability.server.yml up -d --build
+	docker compose -p mon -f docker-compose.observability.server.yml up -d --build
 
 obs-server-down:
-	docker compose -f docker-compose.observability.server.yml down
+	docker compose -p mon -f docker-compose.observability.server.yml down
 
 obs-server-logs:
-	docker compose -f docker-compose.observability.server.yml logs -f
+	docker compose -p mon -f docker-compose.observability.server.yml logs -f
 
 # ── 부하 테스트 (JMeter → InfluxDB → Grafana) ──────────
 # 사용 예: make jmeter-run BASE_HOST=163.239.77.67 BASE_PORT=8000 THREADS=50 DURATION=120
@@ -78,7 +78,7 @@ DURATION      ?= 60
 TEST_NAME     ?= seoganpyo-smoke
 
 jmeter-run:
-	docker compose -f docker-compose.observability.server.yml --profile jmeter run --rm jmeter \
+	docker compose -p mon -f docker-compose.observability.server.yml --profile jmeter run --rm jmeter \
 		-n -t /tests/$(JMETER_FILE) \
 		-l /results/$(TEST_NAME)-$(shell date +%Y%m%d-%H%M%S).jtl \
 		-JBASE_HOST=$(BASE_HOST) -JBASE_PORT=$(BASE_PORT) -JBASE_SCHEME=$(BASE_SCHEME) \
