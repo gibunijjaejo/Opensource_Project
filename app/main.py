@@ -7,8 +7,9 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.api import auth, upload, courses, cart, history, users, admin, admin_chat, admin_security, admin_security_chat, syllabus, posts, contact, professors, portfolio, timetables
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.models import user, course, professor, activity, post, report, notice, portfolio as portfolio_models, contact as contact_model, admin_message  # noqa: F401 — Base 테이블 등록용
+from app.services import portfolio_migration
 
 # Root logger 설정 — Promtail/Loki에서 INFO 이상 로그 수집 가능하도록
 logging.basicConfig(
@@ -18,6 +19,14 @@ logging.basicConfig(
 
 # 서버 실행 시 DB 테이블 생성
 Base.metadata.create_all(bind=engine)
+
+# 포트폴리오 평가 테이블 마이그레이션 — 새 컬럼(rubric, section_scores) 자동 추가 +
+# 옛 0~100 스케일 alignment_score 를 0~6 별점 스케일로 환산.
+_pf_db = SessionLocal()
+try:
+    portfolio_migration.run(engine, _pf_db)
+finally:
+    _pf_db.close()
 
 app = FastAPI(title="서간표 통합 서버")
 
