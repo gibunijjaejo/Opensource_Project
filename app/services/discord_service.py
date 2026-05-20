@@ -25,7 +25,6 @@ _SEOGANPYO_COLOR = 0xB0232A
 
 _SIGNUP_WEBHOOK_ENV = "DISCORD_SIGNUP_WEBHOOK"
 _ADMIN_USERS_URL_ENV = "ADMIN_USERS_URL"
-_ADMIN_USERS_URL_DEFAULT = "http://163.239.77.77:3000/admin/users"
 
 
 def send_signup_notification(name: str, student_id: int, email: str) -> None:
@@ -39,13 +38,21 @@ def send_signup_notification(name: str, student_id: int, email: str) -> None:
         logger.info("%s 미설정 — Discord 알림 스킵 (name=%s)", _SIGNUP_WEBHOOK_ENV, name)
         return
 
-    admin_url = os.getenv(_ADMIN_USERS_URL_ENV, _ADMIN_USERS_URL_DEFAULT)
+    # admin 페이지 링크 — env 설정된 경우만 클릭 가능 링크로 박음.
+    # default 를 코드에 박지 않는 이유: 운영 환경별 URL(스킴/IP/포트) 이 코드 밖에서 관리되어야
+    # 하고, 또 http 평문 URL 이 소스에 있으면 SonarCloud 가 시큐리티 hotspot 으로 분류.
+    admin_url = os.getenv(_ADMIN_USERS_URL_ENV, "").strip()
+    description = (
+        f"[관리자 페이지에서 승인]({admin_url})이 필요합니다."
+        if admin_url
+        else "관리자 페이지에서 승인이 필요합니다."
+    )
     payload = {
         "username": "서간표",
         "embeds": [
             {
                 "title": "✨ 신규 회원가입 신청",
-                "description": f"[관리자 페이지에서 승인]({admin_url})이 필요합니다.",
+                "description": description,
                 "color": _SEOGANPYO_COLOR,
                 "fields": [
                     {"name": "이름", "value": name, "inline": True},
