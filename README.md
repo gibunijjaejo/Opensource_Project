@@ -2,37 +2,51 @@
 
 > **AI 기반 학업 컨설팅 플랫폼** — 학생이 시간표 이미지 한 장만 올리면 졸업 요건 충족 여부, 맞춤 강의, 강의계획서 요약까지 한 번에 받는 풀스택 웹 서비스.
 
-서강대학교 학생을 대상으로 운영 중인 학업 보조 플랫폼입니다. 시간표 OCR 자동 인식, 수강이력 기반 졸업 요건 자동 계산, 4종 LLM을 활용한 강의계획서·교수 연구분야 요약, 맞춤형 강의 추천 등을 제공합니다.
+서강대학교 학생을 대상으로 한 학업 보조 플랫폼입니다. 시간표 OCR 자동 인식, 수강이력 기반 졸업 요건 자동 계산, 용도별로 조합한 LLM을 활용한 강의계획서·교수 연구분야 요약, 포트폴리오 AI 평가, 맞춤형 강의 추천 등을 제공합니다.
 
 ---
 
-## ✨ 주요 기능
+## 주요 기능
 
 | 기능 | 설명 |
 |------|------|
 | **시간표 OCR 자동 인식** | 시간표 이미지 업로드 → Mistral Pixtral 비전 LLM → 과목명·연도·학기 자동 추출 → DB 강의와 fuzzy 매칭 |
 | **졸업 요건 자동 계산** | 수강이력 + 학과 로드맵 비교 → 이수 학점·필수 과목 충족 여부 시각화 |
-| **강의계획서 AI 요약** | PDF 업로드 → Groq llama-3.3-70b → 강의 목표·평가 비중·주차별 학습 내용 구조화 |
-| **교수 연구분야 AI 요약** | 학교 페이지 크롤링 → Ollama exaone3.5 → 한국어 학술 요약 |
+| **강의계획서 AI 요약** | PDF 업로드 → 로컬 Ollama exaone3.5 → 강의 목표·평가 비중·주차별 학습 내용 구조화 |
+| **교수 연구분야 AI 요약** | 학교 페이지 크롤링 → 로컬 Ollama exaone3.5 → 한국어 학술 요약 |
+| **포트폴리오 AI 평가** | 활동·자격증 입력 → Gemini 2.5-flash → 4차원 rubric 별점 평가 (자격증 실재 grounding) |
 | **맞춤 강의 추천** | 관심 직무·이수 강의 기반 강의 추천 |
 | **강의 찜·장바구니** | 수강신청 전 관심 강의 모아두기 (JWT 본인 데이터 격리) |
-| **커뮤니티** | 익명 게시판 (카테고리·댓글·좋아요) |
-| **관리자 대시보드** | 데이터 크롤링·AI 요약 재생성 + Gemini 챗봇으로 자연어 운영 |
+| **커뮤니티** | 익명 게시판 (카테고리·댓글·좋아요·신고) |
+| **관리자 대시보드** | 데이터 크롤링·AI 요약 재생성 + Gemini tool-use 챗봇으로 자연어 운영 + 보안 모니터링 |
 
 ---
 
-## 🏗️ 시스템 아키텍처
+## 기술적 하이라이트
+
+면접에서 자주 묻는 "왜 이렇게 설계했나"에 대한 핵심 의사결정입니다.
+
+- **OCR 마이크로서비스 분리** — 외부 비전 LLM(Mistral Pixtral) 호출을 별도 서비스(`ocr-service`)로 떼어, 외부 API 장애가 메인 백엔드로 전파되지 않도록 **장애 격리**하고 독립 배포가 가능하게 설계.
+- **LLM을 용도별로 조합** — 비전 OCR은 Pixtral, 한국어 요약은 로컬 Ollama, 평가·운영 챗은 Gemini. 외부 API 의존을 줄이기 위해 강의계획서 요약을 **Groq → 로컬 Ollama로 전환**(비용·프라이버시).
+- **본인 데이터 격리** — 장바구니·수강이력·포트폴리오 등 모든 개인 데이터 엔드포인트에 JWT 기반 **소유권 검증**을 강제 (학생 A가 B의 데이터 접근 불가).
+- **DevSecOps 파이프라인** — Trivy(SCA)·Snyk(SAST)·ZAP(DAST) 스캔 결과를 **DefectDojo로 통합**, CI에서 자동 실행 + SonarCloud 품질 게이트.
+- **관측 가능성(Observability)** — `/metrics` 자동 계측 → Prometheus·Grafana, stdout → Promtail·Loki. 라벨 스키마를 검증해 KPI 대시보드를 운영.
+- **테스트 환경 격리** — 운영은 PostgreSQL, 테스트는 SQLite로 분리해 빠르고 독립적인 테스트 실행 (PostgreSQL 전용 타입 미사용).
+
+---
+
+## 시스템 아키텍처
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │  [Next.js 16 Frontend :3000]                                  │
-│        ↓ REST API                                             │
+│        ↓ REST API                                              │
 │  [FastAPI Backend :8080] ──→ /metrics ──→ Prometheus :9090    │
 │        ├─ stdout         ──→ Promtail  ──→ Loki :3100         │
-│        ↓                                       ↓              │
+│        ↓                                       ↓               │
 │  [PostgreSQL 15] [Redis 7] [OCR Service :8001]                │
-│                                ↓                              │
-│                       Mistral Pixtral API                     │
+│                                ↓                               │
+│                       Mistral Pixtral API                      │
 └───────────────────────────────────────────────────────────────┘
                                                 ↓
                                     [Grafana :3001 KPI 5종]
@@ -47,7 +61,7 @@
 
 ---
 
-## 🔧 기술 스택
+## 기술 스택
 
 ### Backend
 `Python 3.11` · `FastAPI 0.135` · `Uvicorn (ASGI)` · `SQLAlchemy 2.0` · `Pydantic 2.12` · `PyJWT` · `passlib/bcrypt` · `prometheus-fastapi-instrumentator` · `rapidfuzz` · `httpx` · `pypdf` · `beautifulsoup4`
@@ -61,10 +75,11 @@
 ### AI / LLM / OCR
 | 모델 | 호스팅 | 용도 |
 |------|--------|------|
-| Mistral Pixtral | API | 시간표 이미지 OCR |
-| Groq llama-3.3-70b | API | 강의계획서 PDF 요약 |
-| Ollama exaone3.5 | 로컬 | 교수 연구분야 요약 |
-| Gemini 2.5-flash | API | 관리자 챗봇 (MCP tool use) |
+| **Mistral Pixtral** (`pixtral-12b-2409`) | API | 시간표 이미지 OCR (비전 LLM) |
+| **Ollama exaone3.5:7.8b** | 로컬 | 강의계획서 요약 · 교수 연구분야 요약 |
+| **Google Gemini 2.5-flash** | API | 포트폴리오 평가 · 관리자/보안 챗봇(tool use) · Loki 로그 분석 |
+
+> 처음엔 강의계획서 요약을 외부 API(Groq)로 구현했으나, **비용·데이터 프라이버시·외부 의존성**을 고려해 로컬 Ollama로 전환했습니다.
 
 ### Infrastructure & DevOps
 `Docker / Docker Compose` (멀티 파일 오버레이) · `Jenkins` (CI/CD) · `SonarQube` · `Trivy` · `Snyk Code` · `DefectDojo` · `ZAP`
@@ -77,7 +92,7 @@
 
 ---
 
-## 🚀 빠른 시작
+## 빠른 시작
 
 ### 사전 요구사항
 - Docker · Docker Compose
@@ -88,7 +103,7 @@
 ```bash
 # 1. 환경변수 설정 (한 번만)
 cp .env.example .env
-# .env에 GEMINI_API_KEY / GROQ_API_KEY / MISTRAL_API_KEY 등 입력
+# .env에 GEMINI_API_KEY (포트폴리오 평가·관리자 챗) / MISTRAL_API_KEY (시간표 OCR) 입력
 
 # 2. 로컬 개발 (--reload + HMR)
 make dev
@@ -113,7 +128,7 @@ make down-obs
 
 ---
 
-## 📂 프로젝트 구조
+## 프로젝트 구조
 
 ```
 opensource_project/
@@ -141,7 +156,7 @@ opensource_project/
 
 ---
 
-## 📖 문서
+## 문서
 
 | 문서 | 내용 |
 |------|------|
@@ -158,7 +173,7 @@ opensource_project/
 
 ---
 
-## 🚦 CI/CD
+## CI/CD
 
 `Jenkinsfile` 기반 파이프라인:
 
@@ -170,7 +185,7 @@ opensource_project/
 
 ---
 
-## 🌿 협업 컨벤션
+## 협업 컨벤션
 
 - **브랜치 전략**: `main`(배포) · `dev`(통합) · `feat/<기능>` → `dev`로 PR
 - **커밋 컨벤션**: `feat:` / `fix:` / `refactor:` / `docs:` / `chore:`
@@ -180,7 +195,7 @@ opensource_project/
 
 ---
 
-## 📜 License
+## License
 
 학생 프로젝트로 별도 라이선스 표기 없음. 코드 인용·재사용 시 출처 표기 부탁드립니다.
 
