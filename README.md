@@ -24,8 +24,6 @@
 
 ## 기술적 하이라이트
 
-면접에서 자주 묻는 "왜 이렇게 설계했나"에 대한 핵심 의사결정입니다.
-
 - **OCR 마이크로서비스 분리** — 외부 비전 LLM(Mistral Pixtral) 호출을 별도 서비스(`ocr-service`)로 떼어, 외부 API 장애가 메인 백엔드로 전파되지 않도록 **장애 격리**하고 독립 배포가 가능하게 설계.
 - **LLM을 용도별로 조합** — 비전 OCR은 Pixtral, 한국어 요약은 로컬 Ollama, 평가·운영 챗은 Gemini. 외부 API 의존을 줄이기 위해 강의계획서 요약을 **Groq → 로컬 Ollama로 전환**(비용·프라이버시).
 - **본인 데이터 격리** — 장바구니·수강이력·포트폴리오 등 모든 개인 데이터 엔드포인트에 JWT 기반 **소유권 검증**을 강제 (학생 A가 B의 데이터 접근 불가).
@@ -56,8 +54,6 @@
 
 **메인 서비스** — Frontend(Next.js) · Backend(FastAPI) · OCR Service(Mistral Pixtral) · PostgreSQL · Redis
 **관측 스택** — Prometheus · Grafana · Loki · Promtail (옵트인, `make up-obs`)
-
-자세한 아키텍처는 [docs/architecture.md](docs/architecture.md) 참고.
 
 ---
 
@@ -180,8 +176,6 @@ opensource_project/
 - **dev 브랜치**: Ruff Lint → pnpm build → pytest + coverage → Trivy(SCA/Secret/IaC) → Snyk Code(SAST) → DefectDojo 업로드
 - **main 브랜치**: pre-deploy 점검 → Docker 빌드/배포 → post-deploy 헬스체크
 - 알림: Discord Embed (성공/실패 시 AI 로그 분석 포함)
-
-별도 ZAP DAST 파이프라인은 `Jenkinsfile.zap` 참고.
 
 ---
 
